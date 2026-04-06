@@ -21,16 +21,18 @@ class ModelDownloader(private val context: Context) {
         private const val READ_TIMEOUT = 30000
     }
 
-    // TODO: Replace with actual hosted model URLs
+    // Actual HuggingFace links to PaddleOCR v3 ONNX mobile models
     private val modelUrls = listOf(
-        "https://huggingface.co/user/PaddleOCR-VL-1.5-Android/resolve/main/model.onnx",
-        "https://huggingface.co/user/PaddleOCR-VL-1.5-Android/resolve/main/dict.txt"
+        "https://huggingface.co/monkt/paddleocr-onnx/resolve/main/ch_PP-OCRv3_det_infer.onnx", // Detection Model
+        "https://huggingface.co/monkt/paddleocr-onnx/resolve/main/ch_PP-OCRv3_rec_infer.onnx", // Recognition Model
+        "https://huggingface.co/monkt/paddleocr-onnx/resolve/main/ppocr_keys_v1.txt"           // Dictionary
     )
 
-    // TODO: Add actual SHA-256 checksums for model integrity verification
+    // TODO: Add actual SHA-256 checksums if you want strict validation
     private val modelChecksums = mapOf(
-        "model.onnx" to "", // Fill with actual SHA-256
-        "dict.txt" to ""    // Fill with actual SHA-256
+        "ch_PP-OCRv3_det_infer.onnx" to "",
+        "ch_PP-OCRv3_rec_infer.onnx" to "",
+        "ppocr_keys_v1.txt" to ""
     )
 
     suspend fun checkAndDownloadModels(

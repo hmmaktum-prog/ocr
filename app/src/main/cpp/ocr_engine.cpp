@@ -20,15 +20,23 @@ bool OcrEngine::init(const std::string& modelDir) {
     modelPath = modelDir;
 
     // Verify model files exist
-    std::string modelFile = modelDir + "/model.onnx";
-    std::string dictFile = modelDir + "/dict.txt";
+    std::string detModelFile = modelDir + "/ch_PP-OCRv3_det_infer.onnx";
+    std::string recModelFile = modelDir + "/ch_PP-OCRv3_rec_infer.onnx";
+    std::string dictFile = modelDir + "/ppocr_keys_v1.txt";
 
-    std::ifstream mf(modelFile);
+    std::ifstream mf(detModelFile);
     if (!mf.good()) {
-        LOGE("Model file not found: %s", modelFile.c_str());
+        LOGE("Detection model file not found: %s", detModelFile.c_str());
         return false;
     }
     mf.close();
+
+    std::ifstream rf(recModelFile);
+    if (!rf.good()) {
+        LOGE("Recognition model file not found: %s", recModelFile.c_str());
+        return false;
+    }
+    rf.close();
 
     std::ifstream df(dictFile);
     if (!df.good()) {
