@@ -21,21 +21,18 @@ class ModelDownloader(private val context: Context) {
         private const val READ_TIMEOUT = 30000
     }
 
-    // Actual HuggingFace links to PaddleOCR v3 ONNX mobile models
-    private val modelUrls = listOf(
-        "https://huggingface.co/monkt/paddleocr-onnx/resolve/main/ch_PP-OCRv3_det_infer.onnx", // Detection Model
-        "https://huggingface.co/monkt/paddleocr-onnx/resolve/main/ch_PP-OCRv3_rec_infer.onnx", // Recognition Model
-        "https://huggingface.co/monkt/paddleocr-onnx/resolve/main/ppocr_keys_v1.txt"           // Dictionary
+    private val fastModelUrls = listOf(
+        "https://huggingface.co/PaddlePaddle/PaddleOCR-VL-1.5-GGUF/resolve/main/PaddleOCR-VL-1.5-Q4_K_M.gguf",
+        "https://huggingface.co/PaddlePaddle/PaddleOCR-VL-1.5-GGUF/resolve/main/PaddleOCR-VL-1.5-mmproj-f16.gguf"
     )
 
-    // TODO: Add actual SHA-256 checksums if you want strict validation
-    private val modelChecksums = mapOf(
-        "ch_PP-OCRv3_det_infer.onnx" to "",
-        "ch_PP-OCRv3_rec_infer.onnx" to "",
-        "ppocr_keys_v1.txt" to ""
+    private val accurateModelUrls = listOf(
+        "https://huggingface.co/PaddlePaddle/PaddleOCR-VL-1.5-GGUF/resolve/main/PaddleOCR-VL-1.5-Q8_0.gguf",
+        "https://huggingface.co/PaddlePaddle/PaddleOCR-VL-1.5-GGUF/resolve/main/PaddleOCR-VL-1.5-mmproj-f16.gguf"
     )
 
     suspend fun checkAndDownloadModels(
+        fastMode: Boolean,
         onProgress: (Int) -> Unit,
         onComplete: (Boolean) -> Unit
     ) {
@@ -44,11 +41,12 @@ class ModelDownloader(private val context: Context) {
                 val modelDir = File(context.getExternalFilesDir(null), "models")
                 if (!modelDir.exists()) modelDir.mkdirs()
 
-                val totalFiles = modelUrls.size
-                for (i in modelUrls.indices) {
+                val urls = if (fastMode) fastModelUrls else accurateModelUrls
+                val totalFiles = urls.size
+                for (i in urls.indices) {
                     coroutineContext.ensureActive() // Support cancellation
 
-                    val urlStr = modelUrls[i]
+                    val urlStr = urls[i]
                     val fileName = urlStr.substringAfterLast("/")
                     val file = File(modelDir, fileName)
 
@@ -146,15 +144,6 @@ class ModelDownloader(private val context: Context) {
                 }
             }
 
-            // TODO: Verify checksum if available
-            val expectedChecksum = modelChecksums[targetFile.name]
-            if (!expectedChecksum.isNullOrEmpty()) {
-                // val actualChecksum = computeSha256(tempFile)
-                // if (actualChecksum != expectedChecksum) {
-                //     tempFile.delete()
-                //     throw Exception("Checksum mismatch for ${targetFile.name}")
-                // }
-            }
 
             // Atomic rename: only replace target after successful download
             if (!tempFile.renameTo(targetFile)) {

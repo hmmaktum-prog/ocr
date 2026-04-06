@@ -14,7 +14,7 @@
         android:label="@string/app_name"
         android:theme="@style/Theme.OCR"
         android:supportsRtl="true"
-        android:usesCleartextTraffic="false"
+        android:usesCleartextTraffic="true"
         android:extractNativeLibs="false">
         <activity
             android:name=".MainActivity"

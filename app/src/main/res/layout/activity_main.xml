@@ -66,6 +66,41 @@
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent">
 
+        <TextView
+            android:id="@+id/modeSelectionTitle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Select Model Type"
+            android:textStyle="bold" />
+
+        <RadioGroup
+            android:id="@+id/modelRadioGroup"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center">
+
+            <RadioButton
+                android:id="@+id/radioFast"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Fast (Q4)"
+                android:checked="true" />
+
+            <RadioButton
+                android:id="@+id/radioAccurate"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Accurate (Q8)" />
+        </RadioGroup>
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnDownload"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="Download &#38; Initialize Model" />
+
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btnSelectFile"
             android:layout_width="wrap_content"

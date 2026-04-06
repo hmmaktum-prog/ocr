@@ -36,6 +36,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var binding: ActivityMainBinding
     private lateinit var downloader: ModelDownloader
     private val ocrEngine = OcrEngine()
+    private lateinit var llamaServerManager: LlamaServerManager
 
     private var processingJob: Job? = null
     private var lastOutputFile: File? = null
@@ -51,13 +52,17 @@ class MainActivity : AppCompatActivity() {
         setContentView(binding.root)
 
         downloader = ModelDownloader(this)
+        llamaServerManager = LlamaServerManager(this)
 
         setupBackPressHandler()
         setupButtons()
-        startModelDownload()
     }
 
     private fun setupButtons() {
+        binding.btnDownload.setOnClickListener {
+            val isFastMode = binding.radioFast.isChecked
+            startModelDownload(isFastMode)
+        }
         binding.btnSelectFile.setOnClickListener {
             // Launch file picker with filtered MIME types
             val intent = Intent(Intent.ACTION_GET_CONTENT).apply {
@@ -90,12 +95,14 @@ class MainActivity : AppCompatActivity() {
         })
     }
 
-    private fun startModelDownload() {
+    private fun startModelDownload(isFastMode: Boolean) {
         binding.statusText.text = getString(R.string.status_checking_models)
         setProgressIndeterminate(true)
+        binding.btnDownload.isEnabled = false
 
         lifecycleScope.launch {
             downloader.checkAndDownloadModels(
+                fastMode = isFastMode,
                 onProgress = { progress ->
                     runOnUiThread {
                         setProgressIndeterminate(false)
@@ -107,10 +114,11 @@ class MainActivity : AppCompatActivity() {
                     runOnUiThread {
                         if (success) {
                             binding.statusText.text = getString(R.string.status_models_ready)
-                            initEngine()
+                            initEngine(isFastMode)
                         } else {
                             binding.progressBar.visibility = View.GONE
-                            showRetryDownloadDialog()
+                            binding.btnDownload.isEnabled = true
+                            showRetryDownloadDialog(isFastMode)
                         }
                     }
                 }
@@ -118,12 +126,12 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun showRetryDownloadDialog() {
+    private fun showRetryDownloadDialog(isFastMode: Boolean) {
         AlertDialog.Builder(this)
             .setTitle(getString(R.string.dialog_retry_download_title))
             .setMessage(getString(R.string.dialog_retry_download_message))
             .setPositiveButton(getString(R.string.dialog_retry)) { _, _ ->
-                startModelDownload()
+                startModelDownload(isFastMode)
             }
             .setNegativeButton(getString(R.string.dialog_no)) { _, _ ->
                 binding.statusText.text = getString(R.string.status_models_failed)
@@ -145,17 +153,28 @@ class MainActivity : AppCompatActivity() {
             .show()
     }
 
-    private fun initEngine() {
+    private fun initEngine(isFastMode: Boolean) {
         lifecycleScope.launch(Dispatchers.IO) {
-            val modelDir = File(getExternalFilesDir(null), "models").absolutePath
-            val success = ocrEngine.initModel(modelDir)
+            val modelDir = File(getExternalFilesDir(null), "models")
+            val modelName = if (isFastMode) "PaddleOCR-VL-1.5-Q4_K_M.gguf" else "PaddleOCR-VL-1.5-Q8_0.gguf"
+            val projName = "PaddleOCR-VL-1.5-mmproj-f16.gguf"
+
+            val modelPath = File(modelDir, modelName).absolutePath
+            val mmprojPath = File(modelDir, projName).absolutePath
+
+            val success = llamaServerManager.extractAndStartServer(modelPath, mmprojPath)
+            
             withContext(Dispatchers.Main) {
                 binding.progressBar.visibility = View.GONE
                 if (success) {
                     binding.statusText.text = getString(R.string.status_engine_ready)
                     binding.btnSelectFile.isEnabled = true
+                    binding.btnDownload.visibility = View.GONE
+                    binding.modelRadioGroup.visibility = View.GONE
+                    binding.modeSelectionTitle.visibility = View.GONE
                 } else {
                     binding.statusText.text = getString(R.string.status_engine_failed)
+                    binding.btnDownload.isEnabled = true
                 }
             }
         }
@@ -386,6 +405,6 @@ class MainActivity : AppCompatActivity() {
     override fun onDestroy() {
         super.onDestroy()
         processingJob?.cancel()
-        ocrEngine.release()
+        llamaServerManager.stopServer()
     }
 }

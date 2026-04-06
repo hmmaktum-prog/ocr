@@ -14,12 +14,6 @@ android {
         targetSdk = 34
         versionCode = 1
         versionName = "1.0"
-        
-        externalNativeBuild {
-            cmake {
-                cppFlags += "-std=c++17"
-            }
-        }
     }
 
     buildTypes {
@@ -29,12 +23,6 @@ android {
         }
     }
     
-    externalNativeBuild {
-        cmake {
-            path = file("src/main/cpp/CMakeLists.txt")
-            version = "3.22.1+"
-        }
-    }
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -59,6 +47,8 @@ dependencies {
     implementation("androidx.activity:activity-ktx:1.8.2")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
     
-    // ONNX Runtime for C++ Inference via Prefab
-    implementation("com.microsoft.onnxruntime:onnxruntime-android:1.17.1")
+    
+    // Networking for Llama API
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    implementation("org.json:json:20231013") // Or use Gson/Moshi
 }

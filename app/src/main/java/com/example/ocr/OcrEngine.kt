@@ -2,55 +2,68 @@ package com.example.ocr
 
 import android.graphics.Bitmap
 import android.util.Log
+import android.util.Base64
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
+import org.json.JSONArray
+import org.json.JSONObject
+import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.FileOutputStream
+import java.io.IOException
+import java.util.concurrent.TimeUnit
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 
 class OcrEngine {
     companion object {
         private const val TAG = "OcrEngine"
-        init {
-            System.loadLibrary("ocr_engine")
-        }
-    }
+    private val client = OkHttpClient.Builder()
+        .connectTimeout(30, TimeUnit.SECONDS)
+        .readTimeout(120, TimeUnit.SECONDS)
+        .build()
 
-    @Volatile
-    private var enginePtr: Long = 0
-
-    private external fun initModelNative(modelDir: String): Long
-    private external fun processImageNative(enginePtr: Long, bitmap: Bitmap): String
-    private external fun releaseNative(enginePtr: Long)
-
-    @Synchronized
-    fun initModel(modelDir: String): Boolean {
-        if (enginePtr != 0L) {
-            releaseNative(enginePtr)
-            enginePtr = 0L
-        }
-        enginePtr = initModelNative(modelDir)
-        return enginePtr != 0L
-    }
-
-    @Synchronized
     fun processImage(bitmap: Bitmap): Result<String> {
-        if (enginePtr == 0L) {
-            return Result.failure(IllegalStateException("OCR Engine not initialized"))
-        }
         return try {
-            val text = processImageNative(enginePtr, bitmap)
-            Result.success(text)
-        } catch (e: Exception) {
-            Log.e(TAG, "processImage failed", e)
-            Result.failure(e)
-        }
-    }
+            val outputStream = ByteArrayOutputStream()
+            bitmap.compress(Bitmap.CompressFormat.JPEG, 80, outputStream)
+            val base64Image = Base64.encodeToString(outputStream.toByteArray(), Base64.NO_WRAP)
 
-    @Synchronized
-    fun release() {
-        if (enginePtr != 0L) {
-            releaseNative(enginePtr)
-            enginePtr = 0L
+            val jsonBody = JSONObject().apply {
+                // Formatting for llama.cpp multimodal
+                put("prompt", "Analyze the image and transcribe all the text found inside it:\n[img-1]")
+                val imagesArray = JSONArray().apply {
+                    put(JSONObject().apply {
+                        put("data", base64Image)
+                        put("id", 1)
+                    })
+                }
+                put("image_data", imagesArray)
+                put("n_predict", 1024)
+                put("temperature", 0.1)
+                put("stream", false)
+            }
+
+            val requestBody = jsonBody.toString().toRequestBody("application/json".toMediaType())
+            val request = Request.Builder()
+                .url(LlamaServerManager.SERVER_URL)
+                .post(requestBody)
+                .build()
+
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) {
+                    throw IOException("Unexpected code $response")
+                }
+                val responseBody = response.body?.string() ?: ""
+                val jsonResponse = JSONObject(responseBody)
+                val content = jsonResponse.optString("content", "")
+                Result.success(content.trim())
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "processImage failed over HTTP", e)
+            Result.failure(e)
         }
     }
 

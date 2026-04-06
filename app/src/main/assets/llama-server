@@ -1,0 +1,3 @@
+// Placeholder for actual llama-server binary.
+// Since official llama.cpp doesn't distribute aarch64 binaries directly via Github Releases,
+// you must place the compiled Android executable here.
