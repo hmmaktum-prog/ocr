@@ -275,8 +275,11 @@ class MainActivity : AppCompatActivity() {
 
         llamaServerManager.setLoadingProgressListener(
             object : LlamaServerManager.LoadingProgressListener {
-                override fun onLoadingProgress(elapsedSeconds: Int) {
+                override fun onLoadingProgress(elapsedSeconds: Int, maxSeconds: Int) {
                     runOnUiThread {
+                        binding.progressBar.isIndeterminate = false
+                        binding.progressBar.max = maxSeconds
+                        binding.progressBar.progress = elapsedSeconds
                         binding.statusText.text = getString(R.string.status_engine_loading, elapsedSeconds)
                     }
                 }

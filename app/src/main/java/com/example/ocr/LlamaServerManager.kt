@@ -51,7 +51,7 @@ class LlamaServerManager(private val context: Context) {
      * Callback interface for server loading progress
      */
     interface LoadingProgressListener {
-        fun onLoadingProgress(elapsedSeconds: Int)
+        fun onLoadingProgress(elapsedSeconds: Int, maxSeconds: Int)
     }
 
     // Fix UI-04: @Volatile ensures write on Main thread is visible from IO thread
@@ -184,17 +184,24 @@ class LlamaServerManager(private val context: Context) {
         outputThread.isDaemon = true
         outputThread.start()
 
-        val maxWaitMs = 120_000L
-        val checkIntervalMs = 1_000L
+        val maxWaitMs = 300_000L   // 5 minutes — large model on emulator needs more time
+        val checkIntervalMs = 500L  // Check every 500ms for faster crash detection
         var elapsed = 0L
+        var lastProgressReportMs = 0L
 
         try {
             while (elapsed < maxWaitMs) {
                 delay(checkIntervalMs)
                 elapsed += checkIntervalMs
 
-                // Report progress to UI
-                progressListener?.onLoadingProgress((elapsed / 1000).toInt())
+                // Report progress to UI every second
+                if (elapsed - lastProgressReportMs >= 1000L) {
+                    lastProgressReportMs = elapsed
+                    progressListener?.onLoadingProgress(
+                        elapsedSeconds = (elapsed / 1000).toInt(),
+                        maxSeconds = (maxWaitMs / 1000).toInt()
+                    )
+                }
 
                 if (!proc.isAlive) {
                     val exitCode = proc.exitValue()
@@ -204,28 +211,30 @@ class LlamaServerManager(private val context: Context) {
                     return StartResult.ProcessCrashed("Exit code: $exitCode\n$output")
                 }
 
-                // Fix LOGIC-07: Try /health first, fallback to "/" for older llama.cpp builds
+                // /health endpoint: "ok" = ready, "loading model" = still loading
                 var serverReady = false
-                for (endpoint in listOf("/health", "/")) {
-                    var conn: HttpURLConnection? = null
-                    try {
-                        conn = URL("http://127.0.0.1:${SERVER_PORT}$endpoint")
-                            .openConnection() as HttpURLConnection
-                        conn.requestMethod = "GET"
-                        conn.connectTimeout = 1500
-                        conn.readTimeout = 1500
-                        val code = conn.responseCode
-                        if (code == 200) {
+                var conn: HttpURLConnection? = null
+                try {
+                    conn = URL("http://127.0.0.1:${SERVER_PORT}/health")
+                        .openConnection() as HttpURLConnection
+                    conn.requestMethod = "GET"
+                    conn.connectTimeout = 1000
+                    conn.readTimeout = 1000
+                    val code = conn.responseCode
+                    if (code == 200) {
+                        val body = conn.inputStream.bufferedReader().readText()
+                        if (body.contains("\"ok\"")) {
                             serverReady = true
                         } else {
-                            Log.d(TAG, "Health check $endpoint returned $code")
+                            Log.d(TAG, "Health check: server still loading (body=$body)")
                         }
-                        break  // Got a response — no need to try next endpoint
-                    } catch (_: Exception) {
-                        // This endpoint not available — try next
-                    } finally {
-                        conn?.disconnect()
+                    } else {
+                        Log.d(TAG, "Health check returned HTTP $code (still loading)")
                     }
+                } catch (_: Exception) {
+                    // Server not yet accepting connections — keep waiting
+                } finally {
+                    conn?.disconnect()
                 }
                 if (serverReady) {
                     Log.i(TAG, "Server ready after ${elapsed}ms")
