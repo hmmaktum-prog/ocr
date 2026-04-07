@@ -73,9 +73,9 @@ class ModelDownloader(private val context: Context) {
                 }
 
                 if (totalRequiredSpace > 0) {
-                    val stat = StatFs(modelDir.absolutePath)
+                    val storageStat = StatFs(modelDir.absolutePath)
                     val safetyMargin = 50 * 1024 * 1024L // 50MB extra
-                    if (stat.availableBytes < totalRequiredSpace + safetyMargin) {
+                    if (storageStat.availableBytes < totalRequiredSpace + safetyMargin) {
                         val requiredMb = totalRequiredSpace / (1024 * 1024)
                         throw Exception(context.getString(R.string.error_insufficient_storage) + " (Needs ~${requiredMb}MB)")
                     }
@@ -244,6 +244,7 @@ class ModelDownloader(private val context: Context) {
         }
     }
 
+    @Suppress("UNUSED_PARAMETER")
     private fun verifyChecksum(file: File): Boolean {
         // Compute SHA-256 Hash of the file and compare against a known source of truth.
         // For multi-GB files, this can be extremely slow on Android devices,
