@@ -57,10 +57,24 @@ jobs:
         uses: gradle/actions/wrapper-validation@v3
 
       # ═══════════════════════════════════════════════════════════════
+      # Keystore সেটআপ (GitHub Secrets থেকে)
+      # ═══════════════════════════════════════════════════════════════
+
+      # ── 7. Keystore decode & সেটআপ ────────────────────────────────
+      - name: Setup release keystore
+        run: |
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > /tmp/paddleocr-release.jks
+          echo "✅ Keystore ready: $(ls -lh /tmp/paddleocr-release.jks)"
+          echo "KEYSTORE_PATH=/tmp/paddleocr-release.jks" >> $GITHUB_ENV
+          echo "KEYSTORE_PASSWORD=${{ secrets.KEYSTORE_PASSWORD }}" >> $GITHUB_ENV
+          echo "KEY_ALIAS=${{ secrets.KEY_ALIAS }}" >> $GITHUB_ENV
+          echo "KEY_PASSWORD=${{ secrets.KEY_PASSWORD }}" >> $GITHUB_ENV
+
+      # ═══════════════════════════════════════════════════════════════
       # llama-server binary: GitHub Release থেকে download, নইলে build
       # ═══════════════════════════════════════════════════════════════
 
-      # ── 7. GitHub Release থেকে prebuilt binary download চেষ্টা ────
+      # ── 8. GitHub Release থেকে prebuilt binary download চেষ্টা ────
       - name: Try download prebuilt llama-server from GitHub Release
         id: binary-download
         env:
@@ -81,7 +95,7 @@ jobs:
             echo "ℹ️ No prebuilt binary found — will build from source"
           fi
 
-      # ── 8. NDK পাথ নির্ধারণ (build দরকার হলে) ─────────────────────
+      # ── 9. NDK পাথ নির্ধারণ (build দরকার হলে) ─────────────────────
       - name: Detect Android NDK path
         if: env.BINARY_FROM_RELEASE != 'true'
         run: |
@@ -102,14 +116,14 @@ jobs:
             fi
           fi
 
-      # ── 9. Build dependencies (build দরকার হলে) ────────────────────
+      # ── 10. Build dependencies (build দরকার হলে) ───────────────────
       - name: Install CMake and Ninja
         if: env.BINARY_FROM_RELEASE != 'true'
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y cmake ninja-build
 
-      # ── 10. llama.cpp clone (build দরকার হলে) ───────────────────────
+      # ── 11. llama.cpp clone (build দরকার হলে) ───────────────────────
       - name: Clone llama.cpp source
         if: env.BINARY_FROM_RELEASE != 'true'
         run: |
@@ -117,7 +131,7 @@ jobs:
             https://github.com/ggerganov/llama.cpp.git /tmp/llama-cpp
           echo "Cloned llama.cpp $LLAMA_CPP_TAG"
 
-      # ── 11. llama-server Android arm64 build (build দরকার হলে) ─────
+      # ── 12. llama-server Android arm64 build (build দরকার হলে) ─────
       - name: Build llama-server for Android arm64-v8a
         if: env.BINARY_FROM_RELEASE != 'true'
         run: |
@@ -149,29 +163,26 @@ jobs:
           echo "✅ Built: $(ls -lh /tmp/llama-server-bin)"
           file /tmp/llama-server-bin
 
-      # ── 12. নতুন binary GitHub Release-এ upload করো (ভবিষ্যৎ build-এর জন্য) ──
+      # ── 13. নতুন binary GitHub Release-এ upload করো ─────────────
       - name: Upload binary to GitHub Release (cache for future builds)
         if: env.BINARY_FROM_RELEASE != 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Release না থাকলে তৈরি করো
           gh release create "$BINARY_RELEASE_TAG" \
             --repo "${{ github.repository }}" \
             --title "llama-server Android arm64 ($LLAMA_CPP_TAG)" \
-            --notes "Pre-built llama-server binary for Android arm64-v8a (API 28+). Built from llama.cpp $LLAMA_CPP_TAG. পরবর্তী CI build এখান থেকে download করবে — আর compile করতে হবে না।" \
+            --notes "Pre-built llama-server binary for Android arm64-v8a (API 28+). Built from llama.cpp $LLAMA_CPP_TAG." \
             --prerelease 2>/dev/null || true
 
-          # Binary upload করো (আগের থাকলে replace করো)
           gh release upload "$BINARY_RELEASE_TAG" \
             "/tmp/llama-server-bin#llama-server-arm64" \
             --repo "${{ github.repository }}" \
             --clobber
 
           echo "✅ Binary uploaded to release $BINARY_RELEASE_TAG"
-          echo "পরবর্তী CI run এখান থেকে download করবে (~1 মিনিট)"
 
-      # ── 13. Binary → APK assets-এ রাখো ───────────────────────────
+      # ── 14. Binary → APK assets-এ রাখো ──────────────────────────
       - name: Embed llama-server into APK assets
         run: |
           cp /tmp/llama-server-bin app/src/main/assets/llama-server
@@ -183,7 +194,7 @@ jobs:
       # APK Build
       # ═══════════════════════════════════════════════════════════════
 
-      # ── 14. Lint চেক ────────────────────────────────────────────────
+      # ── 15. Lint চেক ────────────────────────────────────────────────
       - name: Run Lint
         run: ./gradlew lintDebug --no-daemon
         continue-on-error: true
@@ -197,7 +208,7 @@ jobs:
           retention-days: 7
           if-no-files-found: ignore
 
-      # ── 15. Unit Test ───────────────────────────────────────────────
+      # ── 16. Unit Test ───────────────────────────────────────────────
       - name: Run Unit Tests
         run: ./gradlew testDebugUnitTest --no-daemon
         continue-on-error: true
@@ -211,7 +222,7 @@ jobs:
           retention-days: 7
           if-no-files-found: ignore
 
-      # ── 16. Debug APK ────────────────────────────────────────────────
+      # ── 17. Debug APK ────────────────────────────────────────────────
       - name: Build Debug APK
         run: ./gradlew assembleDebug --no-daemon --stacktrace
 
@@ -222,16 +233,30 @@ jobs:
           path: app/build/outputs/apk/debug/app-debug.apk
           retention-days: 30
 
-      # ── 17. Release APK (unsigned) ────────────────────────────────
-      - name: Build Release APK (unsigned)
+      # ── 18. Signed Release APK ────────────────────────────────────
+      - name: Build Signed Release APK
         run: ./gradlew assembleRelease --no-daemon --stacktrace
 
-      - name: Upload Release APK
+      - name: Verify APK signing
+        run: |
+          APK="app/build/outputs/apk/release/app-release.apk"
+          if [ -f "$APK" ]; then
+            echo "✅ Signed APK found: $(ls -lh $APK)"
+            $ANDROID_HOME/build-tools/$(ls $ANDROID_HOME/build-tools/ | sort -V | tail -1)/apksigner verify --verbose "$APK" 2>&1 | head -5 || true
+          else
+            echo "⚠️ Signed APK not found, checking for unsigned..."
+            ls app/build/outputs/apk/release/
+          fi
+
+      - name: Upload Signed Release APK
         uses: actions/upload-artifact@v4
         with:
-          name: app-release-unsigned-${{ github.run_number }}
-          path: app/build/outputs/apk/release/app-release-unsigned.apk
+          name: app-release-signed-${{ github.run_number }}
+          path: |
+            app/build/outputs/apk/release/app-release.apk
+            app/build/outputs/apk/release/app-release-unsigned.apk
           retention-days: 30
+          if-no-files-found: ignore
 
   # ══════════════════════════════════════════════════════════════════
   # GitHub Release (tag push হলেই শুধু)
@@ -245,16 +270,18 @@ jobs:
       contents: write
 
     steps:
-      - name: Download Release APK artifact
+      - name: Download Signed Release APK artifact
         uses: actions/download-artifact@v4
         with:
-          name: app-release-unsigned-${{ github.run_number }}
+          name: app-release-signed-${{ github.run_number }}
           path: ./apk
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: ./apk/app-release-unsigned.apk
+          files: |
+            ./apk/app-release.apk
+            ./apk/app-release-unsigned.apk
           name: "PaddleOCR-VL ${{ github.ref_name }}"
           body: |
             ## PaddleOCR-VL ${{ github.ref_name }}
@@ -262,13 +289,11 @@ jobs:
             **llama-server**: llama.cpp ${{ env.LLAMA_CPP_TAG }} (Android arm64-v8a)
 
             ### ডাউনলোড
-            নিচের APK ফাইলটি ডাউনলোড করে Android ডিভাইসে ইনস্টল করুন।
+            - **app-release.apk** — Signed APK (সরাসরি ইনস্টল করুন)
 
             ### সমর্থিত ডিভাইস
             - **আর্কিটেকচার**: arm64-v8a (সকল আধুনিক Android ফোন)
             - **ন্যূনতম Android**: 9.0 (API 28)
-
-            > **নোট:** এটি unsigned APK। ইনস্টল করতে "Unknown sources" চালু রাখুন।
           draft: false
           prerelease: false
         env:
