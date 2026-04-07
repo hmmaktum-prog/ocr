@@ -60,6 +60,15 @@ class MainActivity : AppCompatActivity() {
 
         setupBackPressHandler()
         setupButtons()
+        checkStartupState()
+    }
+
+    private fun checkStartupState() {
+        if (modelsAlreadyDownloaded()) {
+            // মডেল আছে — সরাসরি download button-এ "Initialize" দেখাও
+            binding.statusText.text = getString(R.string.status_models_found)
+            binding.btnDownload.text = getString(R.string.btn_initialize_engine)
+        }
     }
 
     private fun setupButtons() {
@@ -94,6 +103,12 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun startModelDownload(isFastMode: Boolean) {
+        // মডেল আগে থেকেই ডাউনলোড হয়ে থাকলে সরাসরি engine চালু করো
+        if (modelsAlreadyDownloaded()) {
+            initEngine()
+            return
+        }
+
         binding.statusText.text = getString(R.string.status_checking_models)
         setProgressIndeterminate(true)
         binding.btnDownload.isEnabled = false
@@ -112,7 +127,7 @@ class MainActivity : AppCompatActivity() {
                     runOnUiThread {
                         if (success) {
                             binding.statusText.text = getString(R.string.status_models_ready)
-                            initEngine(isFastMode)
+                            initEngine()
                         } else {
                             binding.progressBar.visibility = View.GONE
                             binding.btnDownload.isEnabled = true
@@ -151,31 +166,83 @@ class MainActivity : AppCompatActivity() {
             .show()
     }
 
-    private fun initEngine(isFastMode: Boolean) {
+    private fun modelsAlreadyDownloaded(): Boolean {
+        val modelDir = File(getExternalFilesDir(null), "models")
+        val mainModel = File(modelDir, ModelDownloader.MAIN_MODEL_FILE)
+        val mmproj = File(modelDir, ModelDownloader.MMPROJ_FILE)
+        return mainModel.exists() && mainModel.length() > 0L &&
+               mmproj.exists() && mmproj.length() > 0L
+    }
+
+    private fun initEngine() {
+        binding.progressBar.visibility = View.VISIBLE
+        binding.progressBar.isIndeterminate = true
+        binding.statusText.text = getString(R.string.status_engine_starting)
+        binding.btnDownload.isEnabled = false
+
         lifecycleScope.launch(Dispatchers.IO) {
             val modelDir = File(getExternalFilesDir(null), "models")
-            val modelName = ModelDownloader.MAIN_MODEL_FILE
-            val projName = ModelDownloader.MMPROJ_FILE
+            val modelPath = File(modelDir, ModelDownloader.MAIN_MODEL_FILE).absolutePath
+            val mmprojPath = File(modelDir, ModelDownloader.MMPROJ_FILE).absolutePath
 
-            val modelPath = File(modelDir, modelName).absolutePath
-            val mmprojPath = File(modelDir, projName).absolutePath
+            val result = llamaServerManager.extractAndStartServer(modelPath, mmprojPath)
 
-            val success = llamaServerManager.extractAndStartServer(modelPath, mmprojPath)
-            
             withContext(Dispatchers.Main) {
                 binding.progressBar.visibility = View.GONE
-                if (success) {
-                    binding.statusText.text = getString(R.string.status_engine_ready)
-                    binding.btnSelectFile.isEnabled = true
-                    binding.btnDownload.visibility = View.GONE
-                    binding.modelRadioGroup.visibility = View.GONE
-                    binding.modeSelectionTitle.visibility = View.GONE
-                } else {
-                    binding.statusText.text = getString(R.string.status_engine_failed)
-                    binding.btnDownload.isEnabled = true
+                when (result) {
+                    is LlamaServerManager.StartResult.Success -> {
+                        binding.statusText.text = getString(R.string.status_engine_ready)
+                        binding.btnSelectFile.isEnabled = true
+                        binding.btnDownload.visibility = View.GONE
+                        binding.modelRadioGroup.visibility = View.GONE
+                        binding.modeSelectionTitle.visibility = View.GONE
+                    }
+                    is LlamaServerManager.StartResult.InvalidBinary -> {
+                        binding.statusText.text = getString(R.string.status_engine_failed)
+                        showEngineErrorDialog(
+                            getString(R.string.dialog_binary_missing_title),
+                            getString(R.string.dialog_binary_missing_message)
+                        )
+                    }
+                    is LlamaServerManager.StartResult.ProcessCrashed -> {
+                        val detail = result.output.take(300).ifEmpty { "কোনো আউটপুট নেই" }
+                        binding.statusText.text = getString(R.string.status_engine_failed)
+                        showEngineRetryDialog(getString(R.string.dialog_engine_crash_message, detail))
+                    }
+                    is LlamaServerManager.StartResult.Timeout -> {
+                        binding.statusText.text = getString(R.string.status_engine_failed)
+                        showEngineRetryDialog(getString(R.string.dialog_engine_timeout_message))
+                    }
+                    is LlamaServerManager.StartResult.Error -> {
+                        binding.statusText.text = getString(R.string.status_engine_failed)
+                        showEngineRetryDialog(result.message)
+                    }
                 }
             }
         }
+    }
+
+    private fun showEngineRetryDialog(detail: String) {
+        AlertDialog.Builder(this)
+            .setTitle(getString(R.string.dialog_engine_failed_title))
+            .setMessage(detail)
+            .setPositiveButton(getString(R.string.dialog_retry)) { _, _ -> initEngine() }
+            .setNegativeButton(getString(R.string.dialog_no)) { _, _ ->
+                binding.btnDownload.isEnabled = true
+            }
+            .setCancelable(false)
+            .show()
+    }
+
+    private fun showEngineErrorDialog(title: String, message: String) {
+        AlertDialog.Builder(this)
+            .setTitle(title)
+            .setMessage(message)
+            .setPositiveButton(android.R.string.ok) { _, _ ->
+                binding.btnDownload.isEnabled = true
+            }
+            .setCancelable(false)
+            .show()
     }
 
     private fun handleFileSelected(uri: Uri) {

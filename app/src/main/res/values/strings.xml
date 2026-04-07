@@ -1,14 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">PaddleOCR-VL App</string>
+
+    <!-- Status messages -->
     <string name="status_initializing">Initializing…</string>
-    <string name="btn_select_file">Select PDF / Image</string>
-    <string name="btn_cancel">Cancel</string>
-    <string name="btn_share">Share Output</string>
     <string name="status_checking_models">Checking models…</string>
     <string name="status_downloading_model">Downloading Model… <xliff:g xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2" id="progress">%1$d</xliff:g>%%</string>
-    <string name="status_models_ready">Models ready. Engine Initializing…</string>
+    <string name="status_models_ready">Models ready. Starting engine…</string>
+    <string name="status_models_found">Models found. Tap the button to start.</string>
     <string name="status_models_failed">Failed to download models. Check internet connection.</string>
+    <string name="status_engine_starting">Starting engine… Please wait.</string>
     <string name="status_engine_ready">Engine Ready. Please select a file.</string>
     <string name="status_engine_failed">Engine Initialization Failed.</string>
     <string name="status_processing_pdf">Processing PDF page <xliff:g xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2" id="current">%1$d</xliff:g>/<xliff:g xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2" id="total">%2$d</xliff:g>…</string>
@@ -18,17 +19,36 @@
     <string name="status_saved_failed">Failed to generate .docx</string>
     <string name="status_error">Error: <xliff:g xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2" id="message">%1$s</xliff:g></string>
     <string name="status_cancelled">Processing cancelled.</string>
+
+    <!-- Buttons -->
+    <string name="btn_select_file">Select PDF / Image</string>
+    <string name="btn_cancel">Cancel</string>
+    <string name="btn_share">Share Output</string>
+    <string name="btn_initialize_engine">Initialize Engine</string>
+
+    <!-- Error messages -->
     <string name="error_unsupported_file">Unsupported file type. Please select a PDF or image file (PNG, JPG).</string>
     <string name="error_decode_failed">Failed to decode image. The file may be corrupted.</string>
     <string name="error_network">Network error. Please check your internet connection and try again.</string>
+
+    <!-- Dialogs -->
     <string name="dialog_cancel_title">Cancel Processing?</string>
     <string name="dialog_cancel_message">Are you sure you want to cancel the current processing?</string>
     <string name="dialog_yes">Yes</string>
     <string name="dialog_no">No</string>
     <string name="dialog_retry">Retry</string>
+
     <string name="dialog_retry_download_title">Download Failed</string>
     <string name="dialog_retry_download_message">Failed to download models. Would you like to retry?</string>
+
+    <string name="dialog_engine_failed_title">Engine Failed to Start</string>
+    <string name="dialog_engine_crash_message">The server process crashed.\n\nDetails: %1$s\n\nWould you like to retry?</string>
+    <string name="dialog_engine_timeout_message">The server took too long to respond. This may happen when loading very large model files.\n\nWould you like to retry?</string>
+
+    <string name="dialog_binary_missing_title">Server Binary Missing</string>
+    <string name="dialog_binary_missing_message">The llama-server binary is a placeholder and cannot run.\n\nPlease replace app/src/main/assets/llama-server with a real Android-compiled binary from the llama.cpp project and rebuild the APK.</string>
+
+    <!-- Misc -->
     <string name="progress_description">Processing progress</string>
     <string name="file_info">File: <xliff:g xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2" id="name">%1$s</xliff:g></string>
-    <!-- TODO: Add values-bn/strings.xml for Bengali localization -->
 </resources>
