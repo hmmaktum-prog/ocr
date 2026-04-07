@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="ic_launcher_background">#1A0033</color>
+    <color name="splash_background">#121212</color>
+
+    <!-- Fix UI-13/UI-18: Added missing container colors for correct Dark Mode rendering -->
+    <color name="colorPrimary">#BB86FC</color>
+    <color name="colorOnPrimary">#FFFFFF</color><!-- Fix UI-20: White (not black) on purple is MD3 standard -->
+    <color name="colorPrimaryContainer">#1F2060</color>
+    <color name="colorOnPrimaryContainer">#C8C8FF</color>
+
+    <!-- Fix UI-19: Replaced deprecated M2 color names with M3 equivalents -->
+    <color name="colorSecondary">#CFC6FF</color>
+    <color name="colorOnSecondary">#1A0045</color>
+
+    <color name="colorError">#CF6679</color>
+</resources>

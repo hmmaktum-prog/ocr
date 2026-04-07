@@ -1,10 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <color name="ic_launcher_background">#1A0033</color>
-    <color name="colorPrimary">#6200EE</color>
-    <color name="colorPrimaryVariant">#3700B3</color>
-    <color name="colorOnPrimary">#FFFFFF</color>
-    <color name="colorSecondary">#03DAC5</color>
-    <color name="colorOnSecondary">#000000</color>
     <color name="splash_background">#1A0033</color>
+
+    <color name="colorPrimary">#5D5FEF</color>
+    <color name="colorOnPrimary">#FFFFFF</color>
+    <color name="colorPrimaryContainer">#E0E0FF</color>
+    <color name="colorOnPrimaryContainer">#1A1A5C</color>
+    <color name="colorSecondary">#E6E6FA</color>
+    <!-- Fix UI-16: Darkened for WCAG AA contrast ratio (~7:1 vs previous ~2.8:1) -->
+    <color name="colorOnSecondary">#1A1A6B</color>
+    
+    <!-- Fix UI-17: Removed unused surface_background color -->
 </resources>

@@ -13,6 +13,9 @@ android {
         targetSdk = 35
         versionCode = 1
         versionName = "1.0"
+        ndk {
+            abiFilters += listOf("arm64-v8a")
+        }
     }
 
     signingConfigs {
@@ -27,6 +30,11 @@ android {
                 storePassword = keystorePass
                 this.keyAlias = keyAlias
                 keyPassword = keyPass
+            } else {
+                // Fix LOGIC-20: Warn loudly instead of silently skipping signing
+                println("WARNING: Release signing config is incomplete. " +
+                    "Set KEYSTORE_PATH, KEYSTORE_PASSWORD, KEY_ALIAS, KEY_PASSWORD " +
+                    "environment variables. Build will be unsigned!")
             }
         }
     }
@@ -34,7 +42,8 @@ android {
     buildTypes {
         release {
             signingConfig = signingConfigs.getByName("release")
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }
@@ -50,15 +59,6 @@ android {
         viewBinding = true
     }
 
-    lint {
-        disable += setOf(
-            "IconDuplicatesConfig",
-            "IconLauncherShape",
-            "IconLocation",
-            "IconMissingDensityFolder",
-            "MonochromeLauncherIcon"
-        )
-    }
 }
 
 dependencies {
@@ -68,11 +68,18 @@ dependencies {
     implementation("com.google.android.material:material:1.12.0")
     implementation("androidx.constraintlayout:constraintlayout:2.2.1")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
-    implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.8.7")
+    // Fix LOGIC-21: lifecycle-viewmodel-ktx removed — ViewModel pattern not used
     implementation("androidx.activity:activity-ktx:1.10.1")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
 
     // Networking for Llama API
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
-    implementation("org.json:json:20240303")
+    
+    // Image rotation fix
+    implementation("androidx.exifinterface:exifinterface:1.3.7")
+
+    // Fix LOGIC-22: Test dependencies
+    testImplementation("junit:junit:4.13.2")
+    androidTestImplementation("androidx.test.ext:junit:1.2.1")
+    androidTestImplementation("androidx.test.espresso:espresso-core:3.6.1")
 }

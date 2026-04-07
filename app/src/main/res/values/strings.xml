@@ -12,31 +12,51 @@
     <string name="status_engine_starting">Starting engine… Please wait.</string>
     <string name="status_engine_ready">Engine Ready. Please select a file.</string>
     <string name="status_engine_failed">Engine Initialization Failed.</string>
+    <string name="status_engine_loading">Loading model… <xliff:g xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2" id="elapsed">%1$d</xliff:g>s elapsed</string>
     <string name="status_processing_pdf">Processing PDF page <xliff:g xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2" id="current">%1$d</xliff:g>/<xliff:g xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2" id="total">%2$d</xliff:g>…</string>
     <string name="status_processing_image">Processing Image…</string>
     <string name="status_generating_docx">Generating .docx…</string>
-    <string name="status_saved_success">Saved successfully to:\n<xliff:g xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2" id="path">%1$s</xliff:g></string>
+    <string name="status_saved_success">Saved successfully!\nFile: <xliff:g xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2" id="name">%1$s</xliff:g></string>
     <string name="status_saved_failed">Failed to generate .docx</string>
     <string name="status_error">Error: <xliff:g xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2" id="message">%1$s</xliff:g></string>
     <string name="status_cancelled">Processing cancelled.</string>
-    <string name="status_storage_unavailable">Storage unavailable. Cannot save file.</string>
+    <string name="status_ocr_partial_fail">Completed with errors: OCR failed on <xliff:g xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2" id="count">%1$d</xliff:g> page(s): <xliff:g xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2" id="pages">%2$s</xliff:g></string>
+    <string name="status_no_output">No text was extracted from the file.</string>
+    <string name="status_processing_time">Processing… <xliff:g xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2" id="elapsed">%1$d</xliff:g>s elapsed</string>
+    <string name="page_prefix">Page</string>
+    <!-- Fix USE-10: Clarified error message with actionable guidance -->
+    <string name="error_no_output">No text could be extracted. The file may be blank, image-only without OCR data, or corrupted. Try a different file.</string>
 
     <!-- Buttons -->
     <string name="btn_select_file">Select PDF / Image</string>
+    <string name="btn_select_file_disabled">Engine Not Ready</string>
     <string name="btn_cancel">Cancel</string>
     <string name="btn_share">Share Output</string>
     <string name="btn_initialize_engine">Initialize Engine</string>
     <string name="btn_download_model">Download &amp; Initialize Model</string>
-    <string name="label_select_model_type">Select Model Type</string>
-    <string name="label_radio_standard">Standard</string>
-    <string name="label_radio_standard_full">Standard (Full)</string>
+    <string name="btn_preview">Preview Text</string>
 
-    <!-- Error messages -->
-    <string name="error_unsupported_file">Unsupported file type. Please select a PDF or image file (PNG, JPG).</string>
+    <!-- App Onboarding -->
+    <string name="onboarding_title">Welcome to PaddleOCR-VL</string>
+    <string name="onboarding_message">This app runs a powerful OCR engine completely offline on your device.\n\nTo begin, you will need to download the AI models (~500MB). A Wi-Fi connection is highly recommended.</string>
+    <string name="preview_title">Extracted Text</string>
+    
+    <string name="warning_mobile_data">WARNING: You are on Mobile Data. This download may incur extra charges.</string>
+
+    <!-- Fix LOGIC-05: Generic fallback error instead of raw exception message -->
+    <string name="error_unknown">An unexpected error occurred. Please try again.</string>
+    <string name="error_unsupported_file">Unsupported file type. Please select a PDF or image file (PNG, JPG, WebP).</string>
     <string name="error_decode_failed">Failed to decode image. The file may be corrupted.</string>
     <string name="error_network">Network error. Please check your internet connection and try again.</string>
     <string name="error_share_failed">Unable to share file.</string>
-    <string name="error_storage_unavailable">External storage is unavailable. Output saved to internal storage instead.</string>
+    <string name="error_image_too_large">Image is too large (<xliff:g xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2" id="dimensions">%1$s</xliff:g>). Maximum supported: <xliff:g xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2" id="max">%2$d</xliff:g> megapixels.</string>
+    <string name="error_pdf_password_protected">Password-protected PDFs are not supported.</string>
+    <string name="error_pdf_empty">This PDF has no pages.</string>
+    <string name="error_insufficient_storage">Not enough storage space available. Please free up some space.</string>
+    <string name="error_server_busy">Server is busy. Please try again.</string>
+    <string name="error_server_error">OCR processing failed. Please try again.</string>
+    <string name="error_json_parse">Unexpected server response. Please restart the engine.</string>
+    <string name="error_no_output">No output</string>
 
     <!-- Dialogs -->
     <string name="dialog_cancel_title">Cancel Processing?</string>
@@ -58,7 +78,27 @@
     <string name="dialog_unsupported_abi_title">Device Not Supported</string>
     <string name="dialog_unsupported_abi_message">This app requires an arm64-v8a device.\n\nYour device\'s primary ABI is: %1$s\n\nPlease use a physical Android device or an arm64-compatible emulator (API 30+).</string>
 
+    <string name="dialog_cancel_engine_title">Cancel Engine Loading?</string>
+    <string name="dialog_cancel_engine_message">Engine is still loading. Are you sure you want to go back?</string>
+
+    <!-- Fix LOGIC-03: Download cancellation dialog strings -->
+    <string name="dialog_cancel_download_title">Cancel Download?</string>
+    <string name="dialog_cancel_download_message">The model is still downloading. Are you sure you want to cancel?</string>
+
+    <!-- Fix LOGIC-16: Placeholder for pages where OCR failed -->
+    <string name="ocr_page_failed_placeholder">[OCR failed — page %1$d could not be processed]</string>
+
+    <string name="dialog_file_exists_title">File Already Exists</string>
+    <string name="dialog_file_exists_message">A file named "%1$s" already exists. Overwrite?</string>
+    <string name="dialog_overwrite">Overwrite</string>
+    <string name="dialog_rename">Rename</string>
+
+    <string name="dialog_download_confirm_title">Download Model</string>
+    <string name="dialog_download_confirm_message">This will download the OCR model files. Total download size may be several hundred MB.\n\nMake sure you are on Wi-Fi.</string>
+    <string name="dialog_download_start">Download</string>
+
     <!-- Misc -->
     <string name="progress_description">Processing progress</string>
     <string name="file_info">File: <xliff:g xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2" id="name">%1$s</xliff:g></string>
+    <string name="share_document_chooser">Share Document</string>
 </resources>

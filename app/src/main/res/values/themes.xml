@@ -1,13 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.OCR" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+    <style name="Theme.OCR" parent="Theme.Material3.DayNight.NoActionBar">
         <item name="colorPrimary">@color/colorPrimary</item>
-        <item name="colorPrimaryVariant">@color/colorPrimaryVariant</item>
         <item name="colorOnPrimary">@color/colorOnPrimary</item>
+        <item name="colorPrimaryContainer">@color/colorPrimaryContainer</item>
+        <item name="colorOnPrimaryContainer">@color/colorOnPrimaryContainer</item>
         <item name="colorSecondary">@color/colorSecondary</item>
-        <item name="colorSecondaryVariant">#018786</item>
         <item name="colorOnSecondary">@color/colorOnSecondary</item>
-        <item name="android:statusBarColor">@color/colorPrimaryVariant</item>
     </style>
 
     <style name="Theme.OCR.Splash" parent="Theme.SplashScreen">

@@ -8,6 +8,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
+import org.json.JSONException
 import org.json.JSONObject
 import java.io.ByteArrayOutputStream
 import java.io.File
@@ -20,15 +21,12 @@ import java.util.zip.ZipOutputStream
 class OcrEngine {
     companion object {
         private const val TAG = "OcrEngine"
+
+        // Fix PERF-09: Use shared Http client
+        private val client = HttpClientProvider.client
     }
 
-    private val client = OkHttpClient.Builder()
-        .connectTimeout(30, TimeUnit.SECONDS)
-        .writeTimeout(60, TimeUnit.SECONDS)   // বড় ছবি পাঠানোর সময় hang হওয়া ঠেকায়
-        .readTimeout(180, TimeUnit.SECONDS)   // বড় পৃষ্ঠার OCR-এ সময় লাগে
-        .build()
-
-    fun processImage(bitmap: Bitmap): Result<String> {
+    suspend fun processImage(bitmap: Bitmap): Result<String> {
         return try {
             val outputStream = ByteArrayOutputStream()
             bitmap.compress(Bitmap.CompressFormat.JPEG, 80, outputStream)
@@ -44,7 +42,7 @@ class OcrEngine {
                     })
                 }
                 put("image_data", imagesArray)
-                put("n_predict", 1024)
+                put("n_predict", 4096)    // বড় পেজে বেশি token দরকার (ছিল 1024)
                 put("temperature", 0.1)
                 put("stream", false)
             }
@@ -55,12 +53,43 @@ class OcrEngine {
                 .post(requestBody)
                 .build()
 
-            client.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) {
-                    throw IOException("Server returned HTTP ${response.code}: ${response.message}")
+            var responseBody = ""
+            var attempt = 0
+            while (attempt <= 2) {
+                try {
+                    client.newCall(request).execute().use { response ->
+                        if (!response.isSuccessful) {
+                            if (response.code in listOf(429, 503) && attempt < 2) {
+                                attempt++
+                                kotlinx.coroutines.delay(1000L * attempt)
+                                return@use
+                            }
+                            throw IOException("Server returned HTTP ${response.code}: ${response.message}")
+                        }
+                        // Fix SEC-07: cap response body at 1MB to avoid unbounded RAM usage
+                        responseBody = response.body?.source()?.readUtf8(1_000_000) ?: ""
+                    }
+                    if (responseBody.isNotEmpty()) break
+                } catch (e: Exception) {
+                    // Fix LOGIC-14: retry on SocketTimeoutException too (transient failure)
+                    val isRetryable = attempt < 2 && (
+                        e is java.net.SocketTimeoutException ||
+                        e.message?.contains("503") == true ||
+                        e.message?.contains("429") == true
+                    )
+                    if (isRetryable) {
+                        attempt++
+                        kotlinx.coroutines.delay(1000L * attempt)
+                    } else throw e
                 }
-                val responseBody = response.body?.string() ?: ""
-                val jsonResponse = JSONObject(responseBody)
+            }
+
+            val jsonResponse: JSONObject
+            try {
+                jsonResponse = JSONObject(responseBody)
+            } catch (e: JSONException) {
+                throw IOException("Invalid server response format: ${responseBody.take(100)}")
+            }
 
                 // Server error হলে "error" field থাকে — silent empty response এড়াতে চেক করো
                 if (jsonResponse.has("error")) {
@@ -70,7 +99,7 @@ class OcrEngine {
 
                 val content = jsonResponse.optString("content", "")
                 if (content.isEmpty()) {
-                    Log.w(TAG, "Server returned empty content. Full response: $responseBody")
+                    Log.w(TAG, "Server returned empty content")
                 }
                 Result.success(content.trim())
             }
@@ -80,7 +109,13 @@ class OcrEngine {
         }
     }
 
-    fun generateDocx(texts: Array<String>, outputPath: String): Boolean {
+    fun generateDocx(texts: Array<String>, outputPath: String, pagePrefix: String = "Page"): Boolean {
+        // Empty texts check
+        if (texts.isEmpty() || texts.all { it.isBlank() }) {
+            Log.w(TAG, "No text to generate DOCX from")
+            return false
+        }
+
         return try {
             val file = File(outputPath)
             file.parentFile?.mkdirs() // output directory না থাকলে তৈরি করো
@@ -98,8 +133,13 @@ class OcrEngine {
                     zos.write(documentRelsXml().toByteArray())
                     zos.closeEntry()
 
+                    // styles.xml তৈরি করো — Heading1 style definition সহ
+                    zos.putNextEntry(ZipEntry("word/styles.xml"))
+                    zos.write(stylesXml().toByteArray())
+                    zos.closeEntry()
+
                     zos.putNextEntry(ZipEntry("word/document.xml"))
-                    zos.write(documentXml(texts).toByteArray())
+                    zos.write(documentXml(texts, pagePrefix).toByteArray())
                     zos.closeEntry()
                 }
             }
@@ -111,12 +151,31 @@ class OcrEngine {
     }
 
     private fun escapeXml(text: String): String {
-        return text
-            .replace("&", "&amp;")
-            .replace("<", "&lt;")
-            .replace(">", "&gt;")
-            .replace("\"", "&quot;")
-            .replace("'", "&apos;")
+        val out = StringBuilder(text.length)
+        // Fix LOGIC-15: Use index-based loop to handle surrogate pairs (emoji etc.)
+        // Surrogate pairs (U+D800–U+DFFF) are illegal in XML 1.0 — skip them
+        var i = 0
+        while (i < text.length) {
+            val c = text[i]
+            when {
+                // Skip high+low surrogate pairs entirely
+                c.isHighSurrogate() -> {
+                    if (i + 1 < text.length && text[i + 1].isLowSurrogate()) i++ // skip low too
+                    // Do not append — surrogate codepoints are illegal in XML 1.0
+                }
+                c == '&'  -> out.append("&amp;")
+                c == '<'  -> out.append("&lt;")
+                c == '>'  -> out.append("&gt;")
+                c == '"'  -> out.append("&quot;")
+                c == '\'' -> out.append("&apos;")
+                // Skip illegal XML 1.0 control characters
+                (c.code in 0x00..0x08) || (c.code in 0x0B..0x0C) ||
+                (c.code in 0x0E..0x1F) || c.code == 0x7F -> {}
+                else -> out.append(c)
+            }
+            i++
+        }
+        return out.toString()
     }
 
     private fun contentTypesXml(): String = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -124,6 +183,7 @@ class OcrEngine {
   <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
   <Default Extension="xml" ContentType="application/xml"/>
   <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+  <Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>
 </Types>"""
 
     private fun relsXml(): String = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -133,16 +193,46 @@ class OcrEngine {
 
     private fun documentRelsXml(): String = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
 </Relationships>"""
 
-    private fun documentXml(texts: Array<String>): String {
-        val sb = StringBuilder()
+    /**
+     * DOCX styles.xml — Heading1 style definition
+     */
+    private fun stylesXml(): String = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:style w:type="paragraph" w:styleId="Heading1">
+    <w:name w:val="heading 1"/>
+    <w:basedOn w:val="Normal"/>
+    <w:next w:val="Normal"/>
+    <w:pPr>
+      <w:spacing w:before="240" w:after="120"/>
+    </w:pPr>
+    <w:rPr>
+      <w:b/>
+      <w:sz w:val="32"/>
+      <w:szCs w:val="32"/>
+    </w:rPr>
+  </w:style>
+  <w:style w:type="paragraph" w:default="1" w:styleId="Normal">
+    <w:name w:val="Normal"/>
+    <w:rPr>
+      <w:sz w:val="24"/>
+      <w:szCs w:val="24"/>
+    </w:rPr>
+  </w:style>
+</w:styles>"""
+
+    private fun documentXml(texts: Array<String>, pagePrefix: String): String {
+        // Estimate initial capacity to avoid multiple buffer resizes
+        val estimatedSize = texts.sumOf { it.length } * 2 + 500
+        val sb = StringBuilder(estimatedSize)
         sb.append("""<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
   <w:body>
 """)
         texts.forEachIndexed { index, text ->
-            sb.append("""    <w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr><w:r><w:rPr><w:b/></w:rPr><w:t>Page ${index + 1}</w:t></w:r></w:p>
+            sb.append("""    <w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr><w:r><w:rPr><w:b/></w:rPr><w:t>$pagePrefix ${index + 1}</w:t></w:r></w:p>
 """)
             text.lines().forEach { line ->
                 sb.append("    <w:p><w:r><w:t xml:space=\"preserve\">${escapeXml(line)}</w:t></w:r></w:p>\n")

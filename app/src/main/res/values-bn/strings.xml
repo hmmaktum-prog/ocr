@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">PaddleOCR-VL App</string>
+
+    <!-- Status messages -->
+    <string name="status_initializing">চালু হচ্ছে…</string>
+    <string name="status_checking_models">মডেল চেক করা হচ্ছে…</string>
+    <string name="status_downloading_model">মডেল ডাউনলোড হচ্ছে… <xliff:g xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2" id="progress">%1$d</xliff:g>%%</string>
+    <string name="status_models_ready">মডেল প্রস্তুত। ইঞ্জিন চালু হচ্ছে…</string>
+    <string name="status_models_found">মডেল পাওয়া গেছে। শুরু করতে নিচের বাটনে চাপ দিন।</string>
+    <string name="status_models_failed">মডেল ডাউনলোড ব্যর্থ হয়েছে। ইন্টারনেট সংযোগ চেক করুন।</string>
+    <string name="status_engine_starting">ইঞ্জিন শুরু হচ্ছে… অনুগ্রহ করে অপেক্ষা করুন।</string>
+    <string name="status_engine_ready">ইঞ্জিন প্রস্তুত। অনুগ্রহ করে একটি ফাইল নির্বাচন করুন।</string>
+    <string name="status_engine_failed">ইঞ্জিন চালু করতে ব্যর্থ হয়েছে।</string>
+    <string name="status_engine_loading">মডেল লোড হচ্ছে… <xliff:g xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2" id="elapsed">%1$d</xliff:g> সেকেন্ড পার হয়েছে</string>
+    <string name="status_processing_pdf">পিডিএফ পৃষ্ঠা প্রসেস হচ্ছে <xliff:g xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2" id="current">%1$d</xliff:g>/<xliff:g xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2" id="total">%2$d</xliff:g>…</string>
+    <string name="status_processing_image">ছবি প্রসেস হচ্ছে…</string>
+    <string name="status_generating_docx">.docx তৈরি হচ্ছে…</string>
+    <string name="status_saved_success">সফলভাবে সংরক্ষণ করা হয়েছে!\nফাইল: <xliff:g xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2" id="name">%1$s</xliff:g></string>
+    <string name="status_saved_failed">.docx তৈরি করতে ব্যর্থ হয়েছে</string>
+    <string name="status_error">ত্রুটি: <xliff:g xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2" id="message">%1$s</xliff:g></string>
+    <string name="status_cancelled">প্রসেসিং বাতিল করা হয়েছে।</string>
+    <string name="status_ocr_partial_fail">কিছু ত্রুটি সহ সম্পন্ন হয়েছে: <xliff:g xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2" id="count">%1$d</xliff:g> পৃষ্ঠায় OCR ব্যর্থ হয়েছে: <xliff:g xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2" id="pages">%2$s</xliff:g></string>
+    <string name="status_no_output">ফাইল থেকে কোনো টেক্সট পাওয়া যায়নি।</string>
+    <string name="status_processing_time">প্রক্রিয়া চলছে… <xliff:g xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2" id="elapsed">%1$d</xliff:g> সেকেন্ড</string>
+    <string name="page_prefix">পৃষ্ঠা</string>
+    <string name="error_no_output">কোনো টেক্সট পাওয়া যায়নি। ফাইলটি খালি হতে পারে, ছবির মধ্যে টেক্সট নাও থাকতে পারে, অথবা ফাইলটি নষ্ট হতে পারে। অন্য একটি ফাইল চেষ্টা করুন।</string>
+
+    <!-- Buttons -->
+    <string name="btn_select_file">পিডিএফ / ছবি নির্বাচন করুন</string>
+    <string name="btn_cancel">বাতিল করুন</string>
+    <string name="btn_share">আউটপুট শেয়ার করুন</string>
+    <string name="btn_initialize_engine">ইঞ্জিন চালু করুন</string>
+    <string name="btn_download_model">মডেল ডাউনলোড ও ইঞ্জিন চালু করুন</string>
+    <string name="btn_preview">টেক্সট দেখুন</string>
+
+    <!-- App Onboarding -->
+    <string name="onboarding_title">PaddleOCR-VL এ স্বাগতম</string>
+    <string name="onboarding_message">এই অ্যাপটি আপনার ডিভাইসে সম্পূর্ণ অফলাইনে একটি শক্তিশালী এআই ওসিআর ইঞ্জিন চালায়।\n\nশুরু করতে, আপনাকে এআই মডেলগুলো (প্রায় ৫০০ মেগাবাইট) ডাউনলোড করতে হবে। এর জন্য ওয়াই-ফাই (Wi-Fi) ব্যবহার করার পরামর্শ দেওয়া হচ্ছে।</string>
+    <string name="preview_title">পাওয়া টেক্সট</string>
+
+    <string name="warning_mobile_data">সতর্কতা: আপনি মোবাইল ডেটা দিয়ে সংযুক্ত আছেন। এই ডাউনলোডের জন্য অতিরিক্ত ডেটা ফি লাগতে পারে।</string>
+
+    <!-- Error messages -->
+    <string name="error_unknown">একটি অনাকাঙ্ক্ষিত ত্রুটি ঘটেছে। অনুগ্রহ করে আবার চেষ্টা করুন।</string>
+    <string name="error_unsupported_file">অসমর্থিত ফাইল টাইপ। অনুগ্রহ করে একটি পিডিএফ অথবা ছবি (PNG, JPG, WebP) নির্বাচন করুন।</string>
+    <string name="error_decode_failed">ছবি ডিকোড করতে ব্যর্থ হয়েছে। ফাইলটি নষ্ট হতে পারে।</string>
+    <string name="error_network">নেটওয়ার্ক ত্রুটি। অনুগ্রহ করে আপনার ইন্টারনেট সংযোগ চেক করুন এবং আবার চেষ্টা করুন।</string>
+    <string name="error_share_failed">ফাইল শেয়ার করা যাচ্ছে না।</string>
+    <string name="error_image_too_large">ছবিটি অনেক বড় (<xliff:g xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2" id="dimensions">%1$s</xliff:g>)। সর্বোচ্চ অনুমোদিত: <xliff:g xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2" id="max">%2$d</xliff:g> মেগাপিক্সেল।</string>
+    <string name="error_pdf_password_protected">পাসওয়ার্ড-সংরক্ষিত পিডিএফ সমর্থিত নয়।</string>
+    <string name="error_pdf_empty">এই পিডিএফটিতে কোনো পৃষ্ঠা নেই।</string>
+    <string name="error_insufficient_storage">পর্যাপ্ত স্টোরেজ নেই। অনুগ্রহ করে কিছু জায়গা খালি করুন।</string>
+    <string name="error_server_busy">সার্ভার ব্যস্ত আছে। অনুগ্রহ করে আবার চেষ্টা করুন।</string>
+    <string name="error_server_error">OCR প্রসেসিং ব্যর্থ হয়েছে। অনুগ্রহ করে আবার চেষ্টা করুন।</string>
+    <string name="error_json_parse">অপ্রত্যাশিত সার্ভার রেসপন্স। ইঞ্জিন রিস্টার্ট করুন।</string>
+
+    <!-- Dialogs -->
+    <string name="dialog_cancel_title">প্রসেসিং বাতিল করবেন?</string>
+    <string name="dialog_cancel_message">আপনি কি নিশ্চিত যে বর্তমান প্রসেসিং বাতিল করতে চান?</string>
+    <string name="dialog_yes">হ্যাঁ</string>
+    <string name="dialog_no">না</string>
+    <string name="dialog_retry">আবার চেষ্টা করুন</string>
+
+    <string name="dialog_retry_download_title">ডাউনলোড ব্যর্থ হয়েছে</string>
+    <string name="dialog_retry_download_message">মডেল ডাউনলোড করা যায়নি। আপনি কি আবার চেষ্টা করতে চান?</string>
+
+    <string name="dialog_engine_failed_title">ইঞ্জিন শুরু করা যায়নি</string>
+    <string name="dialog_engine_crash_message">সার্ভার প্রসেস ক্র্যাশ করেছে।\n\nবিস্তারিত: %1$s\n\nআপনি কি আবার চেষ্টা করতে চান?</string>
+    <string name="dialog_engine_timeout_message">সার্ভার রেসপন্স করতে অনেক সময় নিচ্ছে। খুব বড় মডেল ফাইল লোড করার সময় এমন হতে পারে।\n\nআপনি কি আবার চেষ্টা করতে চান?</string>
+
+    <string name="dialog_binary_missing_title">সার্ভার বাইনারি নেই</string>
+    <string name="dialog_binary_missing_message">llama-server বাইনারিটি পাওয়া যায়নি বা কাজ করছে না।\n\nঅনুগ্রহ করে app/src/main/assets/llama-server ফোল্ডারে সঠিক বাইনারি দিন।</string>
+
+    <string name="dialog_unsupported_abi_title">অসমর্থিত ডিভাইস</string>
+    <string name="dialog_unsupported_abi_message">এই অ্যাপটির জন্য একটি arm64-v8a ডিভাইস প্রয়োজন।\n\nআপনার ডিভাইসের ABI: %1$s\n\nঅনুগ্রহ করে একটি রিয়েল ডিভাইস বা arm64 এমুলেটর ব্যবহার করুন।</string>
+
+    <string name="dialog_cancel_engine_title">ইঞ্জিন লোডিং বাতিল করবেন?</string>
+    <string name="dialog_cancel_engine_message">ইঞ্জিন এখনও লোড হচ্ছে। আপনি কি নিশ্চিত যে ফিরে যেতে চান?</string>
+
+    <string name="dialog_cancel_download_title">ডাউনলোড বাতিল করবেন?</string>
+    <string name="dialog_cancel_download_message">মডেল এখনও ডাউনলোড হচ্ছে। আপনি কি নিশ্চিত যে বাতিল করতে চান?</string>
+
+    <string name="ocr_page_failed_placeholder">[OCR ব্যর্থ হয়েছে — %1$d পৃষ্ঠাটি প্রসেস করা যায়নি]</string>
+
+    <string name="dialog_file_exists_title">ফাইল আগে থেকেই আছে</string>
+    <string name="dialog_file_exists_message">"%1$s" নামের একটি ফাইল আগে থেকেই আছে। ওভাররাইট করবেন?</string>
+    <string name="dialog_overwrite">ওভাররাইট</string>
+    <string name="dialog_rename">নাম পরিবর্তন</string>
+
+    <string name="dialog_download_confirm_title">মডেল ডাউনলোড</string>
+    <string name="dialog_download_confirm_message">এটি OCR মডেল ফাইলগুলো ডাউনলোড করবে। ফাইলের আকার কয়েকশো মেগাবাইট হতে পারে।\n\nনিশ্চিত করুন যে আপনি Wi-Fi ব্যবহার করছেন।</string>
+    <string name="dialog_download_start">ডাউনলোড করুন</string>
+
+    <!-- Misc -->
+    <string name="progress_description">প্রসেসিংয়ের অগ্রগতি</string>
+    <string name="file_info">ফাইল: <xliff:g xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2" id="name">%1$s</xliff:g></string>
+    <string name="share_document_chooser">ডকুমেন্ট শেয়ার করুন</string>
+</resources>

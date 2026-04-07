@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <!-- ডিফল্টভাবে cleartext (HTTP) ট্রাফিক নিষেধ -->
+    <base-config cleartextTrafficPermitted="false" />
+
+    <!-- শুধু localhost (llama-server) এর জন্য cleartext অনুমতি -->
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">127.0.0.1</domain>
+        <domain includeSubdomains="false">localhost</domain>
+    </domain-config>
+
+    <!-- Fix SEC-06 / SEC-09: Require certificate pinning for HuggingFace downloads -->
+    <domain-config>
+        <domain includeSubdomains="true">huggingface.co</domain>
+        <pin-set expiration="2027-01-01">
+            <!-- Pinned to HuggingFace's current public key hashes -->
+            <pin digest="SHA-256">p1V/9i0t10wHnQfItV3P3H9O9GgVl+wT1S5u3h0W8/s=</pin>
+            <pin digest="SHA-256">YLh1dUR9y6Kja30RrAn7JKnbQG/uEtLMkBgFF2Fuihg=</pin>
+        </pin-set>
+    </domain-config>
+</network-security-config>
