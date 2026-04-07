@@ -731,10 +731,6 @@ class MainActivity : AppCompatActivity() {
         return result ?: "document"
     }
 
-    override fun onConfigurationChanged(newConfig: android.content.res.Configuration) {
-        super.onConfigurationChanged(newConfig)
-    }
-
     override fun onDestroy() {
         super.onDestroy()
         processingJob?.cancel()
