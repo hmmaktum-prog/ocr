@@ -1,6 +1,7 @@
 package com.example.ocr
 
 import android.content.Context
+import android.content.res.AssetFileDescriptor
 import android.os.Build
 import android.util.Log
 import kotlinx.coroutines.Dispatchers
@@ -15,11 +16,11 @@ class LlamaServerManager(private val context: Context) {
         private const val TAG = "LlamaServerManager"
         private const val SERVER_PORT = 8080
         const val SERVER_URL = "http://127.0.0.1:${SERVER_PORT}/completion"
+        private const val COPY_BUFFER_SIZE = 65536 // 64KB chunks — never loads whole file
 
         // ELF magic bytes — একটি বৈধ Linux/Android binary এভাবে শুরু হয়
         private val ELF_MAGIC = byteArrayOf(0x7F, 0x45, 0x4C, 0x46)
 
-        // arm64-v8a ছাড়া অন্য ABI-তে ARM translation থাকতে পারে (API 30+)
         private val SUPPORTED_ABIS: Array<String> get() = Build.SUPPORTED_ABIS
         private val isArm64Supported: Boolean get() = SUPPORTED_ABIS.contains("arm64-v8a")
         private val primaryAbi: String get() = SUPPORTED_ABIS.firstOrNull() ?: "unknown"
@@ -27,7 +28,6 @@ class LlamaServerManager(private val context: Context) {
 
     private var process: Process? = null
 
-    // Process.isAlive() requires API 26; this helper works from API 24
     private fun Process.isAliveCompat(): Boolean = try {
         exitValue()
         false
@@ -56,17 +56,44 @@ class LlamaServerManager(private val context: Context) {
 
             val serverFile = File(context.filesDir, "llama-server")
 
-            // Step 1: Assets থেকে binary extract করো
+            // Step 1: Assets থেকে binary extract করো (streaming — OOM হবে না)
             try {
-                val assetBytes = context.assets.open("llama-server").use { it.readBytes() }
-
-                // আকার ভিন্ন হলে নতুন করে extract করো
-                if (!serverFile.exists() || serverFile.length() != assetBytes.size.toLong()) {
-                    Log.i(TAG, "Extracting llama-server binary (${assetBytes.size / 1024}KB)...")
-                    serverFile.writeBytes(assetBytes)
+                // Asset-এর আকার জানো — পুরো ফাইল memory-তে লোড না করেই
+                val assetSize: Long = try {
+                    context.assets.openFd("llama-server").use { fd: AssetFileDescriptor ->
+                        fd.length
+                    }
+                } catch (e: Exception) {
+                    // openFd কাজ না করলে (compressed asset) fallback: সরাসরি copy করো
+                    -1L
                 }
 
-                // Step 2: ELF magic byte যাচাই — placeholder হলে সাথে সাথে ফিরে যাও
+                val needsExtract = !serverFile.exists() ||
+                    (assetSize > 0 && serverFile.length() != assetSize)
+
+                if (needsExtract) {
+                    Log.i(TAG, "Extracting llama-server binary (streaming, no OOM)...")
+                    val tmpFile = File(context.filesDir, "llama-server.tmp")
+
+                    // Stream করে copy — কখনো পুরো ফাইল RAM-এ যায় না
+                    context.assets.open("llama-server").use { input ->
+                        tmpFile.outputStream().use { output ->
+                            input.copyTo(output, bufferSize = COPY_BUFFER_SIZE)
+                        }
+                    }
+
+                    // Atomic rename: সম্পূর্ণ না হলে replace হবে না
+                    if (!tmpFile.renameTo(serverFile)) {
+                        tmpFile.copyTo(serverFile, overwrite = true)
+                        tmpFile.delete()
+                    }
+
+                    Log.i(TAG, "Extracted: ${serverFile.length() / 1024 / 1024}MB")
+                } else {
+                    Log.i(TAG, "llama-server already extracted (${serverFile.length() / 1024 / 1024}MB), skipping")
+                }
+
+                // Step 2: ELF magic byte যাচাই — শুধু প্রথম 4 byte পড়ি
                 val magic = serverFile.inputStream().use { stream ->
                     val buf = ByteArray(4)
                     var offset = 0
