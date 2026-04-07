@@ -38,7 +38,8 @@ class ModelDownloader(private val context: Context) {
     ) {
         withContext(Dispatchers.IO) {
             try {
-                val modelDir = File(context.getExternalFilesDir(null), "models")
+                val baseDir = context.getExternalFilesDir(null) ?: context.filesDir
+                val modelDir = File(baseDir, "models")
                 if (!modelDir.exists()) modelDir.mkdirs()
 
                 val urls = modelUrls

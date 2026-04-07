@@ -166,8 +166,14 @@ class MainActivity : AppCompatActivity() {
             .show()
     }
 
+    // External storage unavailable হলে internal storage fallback
+    private fun getModelsDir(): File {
+        val baseDir = getExternalFilesDir(null) ?: filesDir
+        return File(baseDir, "models")
+    }
+
     private fun modelsAlreadyDownloaded(): Boolean {
-        val modelDir = File(getExternalFilesDir(null), "models")
+        val modelDir = getModelsDir()
         val mainModel = File(modelDir, ModelDownloader.MAIN_MODEL_FILE)
         val mmproj = File(modelDir, ModelDownloader.MMPROJ_FILE)
         return mainModel.exists() && mainModel.length() > 0L &&
@@ -181,7 +187,7 @@ class MainActivity : AppCompatActivity() {
         binding.btnDownload.isEnabled = false
 
         lifecycleScope.launch(Dispatchers.IO) {
-            val modelDir = File(getExternalFilesDir(null), "models")
+            val modelDir = getModelsDir()
             val modelPath = File(modelDir, ModelDownloader.MAIN_MODEL_FILE).absolutePath
             val mmprojPath = File(modelDir, ModelDownloader.MMPROJ_FILE).absolutePath
 
@@ -293,7 +299,7 @@ class MainActivity : AppCompatActivity() {
                 }
 
                 val sanitizedName = sanitizeFileName(fileName.substringBeforeLast("."))
-                val outDir = getExternalFilesDir(null)
+                val outDir = getExternalFilesDir(null) ?: filesDir  // null হলে internal storage
                 val outFile = File(outDir, "$sanitizedName.docx")
 
                 val result = ocrEngine.generateDocx(extractedTexts.toTypedArray(), outFile.absolutePath)
@@ -436,7 +442,7 @@ class MainActivity : AppCompatActivity() {
             startActivity(Intent.createChooser(shareIntent, "Share Document"))
         } catch (e: Exception) {
             Log.w(TAG, "Share failed", e)
-            Toast.makeText(this, "Unable to share file", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, getString(R.string.error_share_failed), Toast.LENGTH_SHORT).show()
         }
     }
 

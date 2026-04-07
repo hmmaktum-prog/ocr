@@ -24,7 +24,8 @@ class OcrEngine {
 
     private val client = OkHttpClient.Builder()
         .connectTimeout(30, TimeUnit.SECONDS)
-        .readTimeout(120, TimeUnit.SECONDS)
+        .writeTimeout(60, TimeUnit.SECONDS)   // বড় ছবি পাঠানোর সময় hang হওয়া ঠেকায়
+        .readTimeout(180, TimeUnit.SECONDS)   // বড় পৃষ্ঠার OCR-এ সময় লাগে
         .build()
 
     fun processImage(bitmap: Bitmap): Result<String> {
@@ -32,9 +33,9 @@ class OcrEngine {
             val outputStream = ByteArrayOutputStream()
             bitmap.compress(Bitmap.CompressFormat.JPEG, 80, outputStream)
             val base64Image = Base64.encodeToString(outputStream.toByteArray(), Base64.NO_WRAP)
+            outputStream.reset() // GC চাপ কমাতে buffer clear করো
 
             val jsonBody = JSONObject().apply {
-                // Formatting for llama.cpp multimodal
                 put("prompt", "Analyze the image and transcribe all the text found inside it:\n[img-1]")
                 val imagesArray = JSONArray().apply {
                     put(JSONObject().apply {
@@ -56,15 +57,25 @@ class OcrEngine {
 
             client.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) {
-                    throw IOException("Unexpected code $response")
+                    throw IOException("Server returned HTTP ${response.code}: ${response.message}")
                 }
                 val responseBody = response.body?.string() ?: ""
                 val jsonResponse = JSONObject(responseBody)
+
+                // Server error হলে "error" field থাকে — silent empty response এড়াতে চেক করো
+                if (jsonResponse.has("error")) {
+                    val errMsg = jsonResponse.optString("error", "Unknown server error")
+                    throw IOException("llama-server error: $errMsg")
+                }
+
                 val content = jsonResponse.optString("content", "")
+                if (content.isEmpty()) {
+                    Log.w(TAG, "Server returned empty content. Full response: $responseBody")
+                }
                 Result.success(content.trim())
             }
         } catch (e: Exception) {
-            Log.e(TAG, "processImage failed over HTTP", e)
+            Log.e(TAG, "processImage failed", e)
             Result.failure(e)
         }
     }
@@ -72,25 +83,21 @@ class OcrEngine {
     fun generateDocx(texts: Array<String>, outputPath: String): Boolean {
         return try {
             val file = File(outputPath)
-            // Generate a proper OOXML .docx file (minimal valid ZIP structure)
+            file.parentFile?.mkdirs() // output directory না থাকলে তৈরি করো
             FileOutputStream(file).use { fos ->
                 ZipOutputStream(fos).use { zos ->
-                    // [Content_Types].xml
                     zos.putNextEntry(ZipEntry("[Content_Types].xml"))
                     zos.write(contentTypesXml().toByteArray())
                     zos.closeEntry()
 
-                    // _rels/.rels
                     zos.putNextEntry(ZipEntry("_rels/.rels"))
                     zos.write(relsXml().toByteArray())
                     zos.closeEntry()
 
-                    // word/_rels/document.xml.rels
                     zos.putNextEntry(ZipEntry("word/_rels/document.xml.rels"))
                     zos.write(documentRelsXml().toByteArray())
                     zos.closeEntry()
 
-                    // word/document.xml
                     zos.putNextEntry(ZipEntry("word/document.xml"))
                     zos.write(documentXml(texts).toByteArray())
                     zos.closeEntry()
@@ -135,14 +142,11 @@ class OcrEngine {
   <w:body>
 """)
         texts.forEachIndexed { index, text ->
-            // Page header
             sb.append("""    <w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr><w:r><w:rPr><w:b/></w:rPr><w:t>Page ${index + 1}</w:t></w:r></w:p>
 """)
-            // Split text by lines and add each as a paragraph
             text.lines().forEach { line ->
                 sb.append("    <w:p><w:r><w:t xml:space=\"preserve\">${escapeXml(line)}</w:t></w:r></w:p>\n")
             }
-            // Page break (except after last page)
             if (index < texts.size - 1) {
                 sb.append("    <w:p><w:r><w:br w:type=\"page\"/></w:r></w:p>\n")
             }

@@ -19,6 +19,7 @@
     <string name="status_saved_failed">Failed to generate .docx</string>
     <string name="status_error">Error: <xliff:g xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2" id="message">%1$s</xliff:g></string>
     <string name="status_cancelled">Processing cancelled.</string>
+    <string name="status_storage_unavailable">Storage unavailable. Cannot save file.</string>
 
     <!-- Buttons -->
     <string name="btn_select_file">Select PDF / Image</string>
@@ -34,6 +35,8 @@
     <string name="error_unsupported_file">Unsupported file type. Please select a PDF or image file (PNG, JPG).</string>
     <string name="error_decode_failed">Failed to decode image. The file may be corrupted.</string>
     <string name="error_network">Network error. Please check your internet connection and try again.</string>
+    <string name="error_share_failed">Unable to share file.</string>
+    <string name="error_storage_unavailable">External storage is unavailable. Output saved to internal storage instead.</string>
 
     <!-- Dialogs -->
     <string name="dialog_cancel_title">Cancel Processing?</string>
