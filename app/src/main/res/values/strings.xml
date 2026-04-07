@@ -24,9 +24,6 @@
     <string name="status_no_output">No text was extracted from the file.</string>
     <string name="status_processing_time">Processing… <xliff:g xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2" id="elapsed">%1$d</xliff:g>s elapsed</string>
     <string name="page_prefix">Page</string>
-    <!-- Fix USE-10: Clarified error message with actionable guidance -->
-    <string name="error_no_output">No text could be extracted. The file may be blank, image-only without OCR data, or corrupted. Try a different file.</string>
-
     <!-- Buttons -->
     <string name="btn_select_file">Select PDF / Image</string>
     <string name="btn_select_file_disabled">Engine Not Ready</string>
@@ -56,7 +53,7 @@
     <string name="error_server_busy">Server is busy. Please try again.</string>
     <string name="error_server_error">OCR processing failed. Please try again.</string>
     <string name="error_json_parse">Unexpected server response. Please restart the engine.</string>
-    <string name="error_no_output">No output</string>
+    <string name="error_no_output">No text could be extracted. The file may be blank, image-only without OCR data, or corrupted. Try a different file.</string>
 
     <!-- Dialogs -->
     <string name="dialog_cancel_title">Cancel Processing?</string>

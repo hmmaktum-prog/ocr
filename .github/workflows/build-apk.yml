@@ -63,12 +63,20 @@ jobs:
       # ── 7. Keystore decode & সেটআপ ────────────────────────────────
       - name: Setup release keystore
         run: |
-          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > /tmp/paddleocr-release.jks
-          echo "✅ Keystore ready: $(ls -lh /tmp/paddleocr-release.jks)"
-          echo "KEYSTORE_PATH=/tmp/paddleocr-release.jks" >> $GITHUB_ENV
-          echo "KEYSTORE_PASSWORD=${{ secrets.KEYSTORE_PASSWORD }}" >> $GITHUB_ENV
-          echo "KEY_ALIAS=${{ secrets.KEY_ALIAS }}" >> $GITHUB_ENV
-          echo "KEY_PASSWORD=${{ secrets.KEY_PASSWORD }}" >> $GITHUB_ENV
+          if [ -n "${{ secrets.KEYSTORE_BASE64 }}" ]; then
+            echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > /tmp/paddleocr-release.jks
+            if [ -s /tmp/paddleocr-release.jks ]; then
+              echo "✅ Keystore ready: $(ls -lh /tmp/paddleocr-release.jks)"
+              echo "KEYSTORE_PATH=/tmp/paddleocr-release.jks" >> $GITHUB_ENV
+              echo "KEYSTORE_PASSWORD=${{ secrets.KEYSTORE_PASSWORD }}" >> $GITHUB_ENV
+              echo "KEY_ALIAS=${{ secrets.KEY_ALIAS }}" >> $GITHUB_ENV
+              echo "KEY_PASSWORD=${{ secrets.KEY_PASSWORD }}" >> $GITHUB_ENV
+            else
+              echo "⚠️ Keystore decode failed (empty file). Release APK will be unsigned."
+            fi
+          else
+            echo "⚠️ KEYSTORE_BASE64 secret not set. Release APK will be unsigned."
+          fi
 
       # ═══════════════════════════════════════════════════════════════
       # llama-server binary: GitHub Release থেকে download, নইলে build

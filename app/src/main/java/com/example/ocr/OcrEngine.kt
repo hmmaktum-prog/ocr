@@ -102,7 +102,6 @@ class OcrEngine {
                     Log.w(TAG, "Server returned empty content")
                 }
                 Result.success(content.trim())
-            }
         } catch (e: Exception) {
             Log.e(TAG, "processImage failed", e)
             Result.failure(e)
