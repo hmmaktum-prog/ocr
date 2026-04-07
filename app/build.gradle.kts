@@ -6,7 +6,6 @@ plugins {
 android {
     namespace = "com.example.ocr"
     compileSdk = 34
-    ndkVersion = "26.1.10909125"
 
     defaultConfig {
         applicationId = "com.example.ocr"
@@ -33,7 +32,6 @@ android {
     }
     buildFeatures {
         viewBinding = true
-        prefab = true
     }
 }
 

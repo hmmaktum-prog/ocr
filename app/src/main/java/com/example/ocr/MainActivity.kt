@@ -66,12 +66,6 @@ class MainActivity : AppCompatActivity() {
             startModelDownload(isFastMode)
         }
         binding.btnSelectFile.setOnClickListener {
-            // Launch file picker with filtered MIME types
-            val intent = Intent(Intent.ACTION_GET_CONTENT).apply {
-                type = "*/*"
-                putExtra(Intent.EXTRA_MIME_TYPES, SUPPORTED_MIME_TYPES.toTypedArray())
-                addCategory(Intent.CATEGORY_OPENABLE)
-            }
             selectFileLauncher.launch("*/*")
         }
 
@@ -318,14 +312,18 @@ class MainActivity : AppCompatActivity() {
         val memInfo = ActivityManager.MemoryInfo()
         activityManager.getMemoryInfo(memInfo)
 
-        // Each pixel = 4 bytes (ARGB_8888)
         val availableMb = memInfo.availMem / (1024 * 1024)
-        return when {
+        val desiredScale = when {
             availableMb < 128 -> 0.75f
             availableMb < 256 -> 1.0f
             availableMb < 512 -> 1.5f
             else -> 2.0f
         }
+
+        // Cap scale so the bitmap never exceeds ~50 MB (4 bytes per ARGB_8888 pixel)
+        val maxPixels = 50 * 1024 * 1024 / 4
+        val maxScale = Math.sqrt(maxPixels.toDouble() / (pageWidth * pageHeight)).toFloat()
+        return minOf(desiredScale, maxScale).coerceAtLeast(0.5f)
     }
 
     private fun setProcessingState(processing: Boolean) {

@@ -71,24 +71,25 @@ class LlamaServerManager(private val context: Context) {
     }
 
     private suspend fun waitForServerReady(): Boolean {
-        for (i in 0..15) { // wait up to 15 seconds
+        val maxWaitSeconds = 60
+        for (i in 0 until maxWaitSeconds) {
+            delay(1000)
             try {
                 val url = URL("http://127.0.0.1:${SERVER_PORT}/health")
                 val connection = url.openConnection() as HttpURLConnection
                 connection.requestMethod = "GET"
-                connection.connectTimeout = 1000
-                if (connection.responseCode == 200 || connection.responseCode == 404 || connection.responseCode == 503) {
-                    // Server is up and replying with HTTP (health endpoint might be 503 if loading, 200 when ready)
-                    val status = connection.responseCode
-                    if (status == 200 || status == 204) {
-                        return true
-                    }
-                }
+                connection.connectTimeout = 2000
+                connection.readTimeout = 2000
+                val responseCode = connection.responseCode
                 connection.disconnect()
+                when (responseCode) {
+                    200 -> return true          // Server is fully ready
+                    503 -> continue             // Server is loading the model — keep waiting
+                    else -> continue            // Any other code — keep waiting
+                }
             } catch (e: Exception) {
-                // Not ready
+                // Server not up yet — keep waiting
             }
-            delay(1000)
         }
         return false
     }

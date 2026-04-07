@@ -47,10 +47,21 @@ export ANDROID_HOME=/home/runner/android-sdk && ./gradlew assembleDebug --no-dae
 ```
 Output: `app/build/outputs/apk/debug/app-debug.apk`
 
-## Code Fixes Applied During Import
+## Code Fixes Applied
+
+### Import Fixes
 1. **OcrEngine.kt**: Fixed broken `companion object` syntax — closing brace was missing, causing instance methods to be incorrectly scoped inside the companion object.
-2. **MainActivity.kt**: Added missing import `kotlinx.coroutines.currentCoroutineContext` and fixed `ensureActive()` call to use `currentCoroutineContext().ensureActive()` since it's called in a suspend function (not a CoroutineScope directly).
-3. **Resources**: Created missing mipmap icon files (`ic_launcher.png` and `ic_launcher_round.png`) in all density buckets — these were referenced in AndroidManifest.xml but absent from the repository.
+2. **MainActivity.kt**: Added missing import `kotlinx.coroutines.currentCoroutineContext` and fixed `ensureActive()` call to use `currentCoroutineContext().ensureActive()` since it's called in a suspend function.
+3. **Resources**: Created missing mipmap icon files (`ic_launcher.png` / `ic_launcher_round.png`) in all density buckets (mdpi → xxxhdpi).
+
+### Logic & Bug Fixes
+4. **MainActivity.kt** (`setupButtons`): Removed dead `Intent` variable that was built but never passed to the file picker launcher — the MIME filter was silently ignored.
+5. **MainActivity.kt** (`calculateSafeScale`): Parameters `pageWidth`/`pageHeight` were declared but unused. Fixed to actually cap bitmap scale based on page dimensions (max ~50 MB bitmap), preventing OutOfMemoryError on large PDFs.
+6. **LlamaServerManager.kt** (`waitForServerReady`): Logic bug where the method didn't properly distinguish between server starting (503) and server ready (200). Also increased timeout from 15 s to 60 s to allow time for large model loading.
+7. **app/build.gradle.kts**: Removed `ndkVersion` and `prefab = true` — these triggered NDK requirement without any actual native code, causing CI builds to fail.
+
+### GitHub Actions
+8. **`.github/workflows/build-apk.yml`**: Removed broken NDK installation step, removed unnecessary `gradle/actions/setup-gradle` duplication, added `--no-daemon --stacktrace` flags, added `workflow_dispatch` trigger, increased APK artifact retention to 30 days.
 
 ## App Workflow
 1. User taps "Download" to fetch GGUF models from HuggingFace
