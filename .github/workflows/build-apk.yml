@@ -12,13 +12,14 @@ on:
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
   LLAMA_CPP_TAG: b8683
+  BINARY_RELEASE_TAG: llama-android-arm64-b8683
 
 jobs:
   build:
     name: Build & Test
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
 
     steps:
       # ── 1. সোর্স কোড নামানো ───────────────────────────────────────
@@ -56,17 +57,33 @@ jobs:
         uses: gradle/actions/wrapper-validation@v3
 
       # ═══════════════════════════════════════════════════════════════
-      # llama-server Android arm64-v8a binary build
+      # llama-server binary: GitHub Release থেকে download, নইলে build
       # ═══════════════════════════════════════════════════════════════
 
-      # ── 7. Build dependencies ───────────────────────────────────────
-      - name: Install CMake and Ninja
+      # ── 7. GitHub Release থেকে prebuilt binary download চেষ্টা ────
+      - name: Try download prebuilt llama-server from GitHub Release
+        id: binary-download
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y cmake ninja-build
+          echo "Checking GitHub Release: $BINARY_RELEASE_TAG"
+          if gh release download "$BINARY_RELEASE_TAG" \
+            --repo "${{ github.repository }}" \
+            --pattern "llama-server-arm64" \
+            --dir /tmp/ 2>/dev/null; then
+            mv /tmp/llama-server-arm64 /tmp/llama-server-bin
+            echo "BINARY_FROM_RELEASE=true" >> $GITHUB_ENV
+            echo "✅ Prebuilt binary downloaded from release $BINARY_RELEASE_TAG"
+            ls -lh /tmp/llama-server-bin
+            file /tmp/llama-server-bin
+          else
+            echo "BINARY_FROM_RELEASE=false" >> $GITHUB_ENV
+            echo "ℹ️ No prebuilt binary found — will build from source"
+          fi
 
-      # ── 8. NDK পাথ নির্ধারণ করা ────────────────────────────────────
+      # ── 8. NDK পাথ নির্ধারণ (build দরকার হলে) ─────────────────────
       - name: Detect Android NDK path
+        if: env.BINARY_FROM_RELEASE != 'true'
         run: |
           if [ -n "$ANDROID_NDK_HOME" ] && [ -d "$ANDROID_NDK_HOME" ]; then
             echo "NDK_PATH=$ANDROID_NDK_HOME" >> $GITHUB_ENV
@@ -75,7 +92,6 @@ jobs:
           elif [ -n "$ANDROID_NDK_LATEST_HOME" ] && [ -d "$ANDROID_NDK_LATEST_HOME" ]; then
             echo "NDK_PATH=$ANDROID_NDK_LATEST_HOME" >> $GITHUB_ENV
           else
-            # Fallback: find any installed NDK
             NDK_DIR=$(ls -d $ANDROID_HOME/ndk/* 2>/dev/null | tail -1)
             if [ -n "$NDK_DIR" ]; then
               echo "NDK_PATH=$NDK_DIR" >> $GITHUB_ENV
@@ -85,34 +101,32 @@ jobs:
               echo "NDK_PATH=$ANDROID_HOME/ndk/26.3.11579264" >> $GITHUB_ENV
             fi
           fi
-          echo "NDK found: $NDK_PATH"
 
-      # ── 9. llama-server build cache ─────────────────────────────────
-      - name: Cache llama-server binary (arm64-v8a)
-        id: llama-cache
-        uses: actions/cache@v4
-        with:
-          path: /tmp/llama-server-arm64
-          key: llama-android-arm64-${{ env.LLAMA_CPP_TAG }}-v1
+      # ── 9. Build dependencies (build দরকার হলে) ────────────────────
+      - name: Install CMake and Ninja
+        if: env.BINARY_FROM_RELEASE != 'true'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y cmake ninja-build
 
-      # ── 10. llama.cpp clone ─────────────────────────────────────────
+      # ── 10. llama.cpp clone (build দরকার হলে) ───────────────────────
       - name: Clone llama.cpp source
-        if: steps.llama-cache.outputs.cache-hit != 'true'
+        if: env.BINARY_FROM_RELEASE != 'true'
         run: |
           git clone --depth 1 --branch $LLAMA_CPP_TAG \
             https://github.com/ggerganov/llama.cpp.git /tmp/llama-cpp
           echo "Cloned llama.cpp $LLAMA_CPP_TAG"
 
-      # ── 11. llama-server Android arm64 build ───────────────────────
+      # ── 11. llama-server Android arm64 build (build দরকার হলে) ─────
       - name: Build llama-server for Android arm64-v8a
-        if: steps.llama-cache.outputs.cache-hit != 'true'
+        if: env.BINARY_FROM_RELEASE != 'true'
         run: |
           cmake -B /tmp/llama-build \
             -S /tmp/llama-cpp \
             -G Ninja \
             -DCMAKE_TOOLCHAIN_FILE="$NDK_PATH/build/cmake/android.toolchain.cmake" \
             -DANDROID_ABI=arm64-v8a \
-            -DANDROID_PLATFORM=android-24 \
+            -DANDROID_PLATFORM=android-28 \
             -DLLAMA_BUILD_SERVER=ON \
             -DLLAMA_BUILD_TESTS=OFF \
             -DLLAMA_BUILD_EXAMPLES=OFF \
@@ -121,11 +135,9 @@ jobs:
             -DGGML_OPENMP=OFF \
             -DCMAKE_BUILD_TYPE=Release
 
-          # Build server (try specific target, fallback to all)
           cmake --build /tmp/llama-build --target llama-server -j$(nproc) \
             || cmake --build /tmp/llama-build -j$(nproc)
 
-          # Binary খুঁজে cache করো
           SERVER_BIN=$(find /tmp/llama-build -type f -name "llama-server" \
             ! -path "*/CMakeFiles/*" | head -1)
           if [ -z "$SERVER_BIN" ]; then
@@ -133,24 +145,45 @@ jobs:
             find /tmp/llama-build/bin -type f 2>/dev/null
             exit 1
           fi
-          cp "$SERVER_BIN" /tmp/llama-server-arm64
-          echo "✅ Built: $(ls -lh /tmp/llama-server-arm64)"
-          file /tmp/llama-server-arm64
+          cp "$SERVER_BIN" /tmp/llama-server-bin
+          echo "✅ Built: $(ls -lh /tmp/llama-server-bin)"
+          file /tmp/llama-server-bin
 
-      # ── 12. Binary → APK assets-এ রাখো ───────────────────────────
+      # ── 12. নতুন binary GitHub Release-এ upload করো (ভবিষ্যৎ build-এর জন্য) ──
+      - name: Upload binary to GitHub Release (cache for future builds)
+        if: env.BINARY_FROM_RELEASE != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Release না থাকলে তৈরি করো
+          gh release create "$BINARY_RELEASE_TAG" \
+            --repo "${{ github.repository }}" \
+            --title "llama-server Android arm64 ($LLAMA_CPP_TAG)" \
+            --notes "Pre-built llama-server binary for Android arm64-v8a (API 28+). Built from llama.cpp $LLAMA_CPP_TAG. পরবর্তী CI build এখান থেকে download করবে — আর compile করতে হবে না।" \
+            --prerelease 2>/dev/null || true
+
+          # Binary upload করো (আগের থাকলে replace করো)
+          gh release upload "$BINARY_RELEASE_TAG" \
+            "/tmp/llama-server-bin#llama-server-arm64" \
+            --repo "${{ github.repository }}" \
+            --clobber
+
+          echo "✅ Binary uploaded to release $BINARY_RELEASE_TAG"
+          echo "পরবর্তী CI run এখান থেকে download করবে (~1 মিনিট)"
+
+      # ── 13. Binary → APK assets-এ রাখো ───────────────────────────
       - name: Embed llama-server into APK assets
         run: |
-          cp /tmp/llama-server-arm64 app/src/main/assets/llama-server
+          cp /tmp/llama-server-bin app/src/main/assets/llama-server
           echo "✅ llama-server embedded: $(ls -lh app/src/main/assets/llama-server)"
           file app/src/main/assets/llama-server
-          # ELF header যাচাই
           head -c 4 app/src/main/assets/llama-server | xxd | head -1
 
       # ═══════════════════════════════════════════════════════════════
       # APK Build
       # ═══════════════════════════════════════════════════════════════
 
-      # ── 13. Lint চেক ────────────────────────────────────────────────
+      # ── 14. Lint চেক ────────────────────────────────────────────────
       - name: Run Lint
         run: ./gradlew lintDebug --no-daemon
         continue-on-error: true
@@ -164,7 +197,7 @@ jobs:
           retention-days: 7
           if-no-files-found: ignore
 
-      # ── 14. Unit Test ───────────────────────────────────────────────
+      # ── 15. Unit Test ───────────────────────────────────────────────
       - name: Run Unit Tests
         run: ./gradlew testDebugUnitTest --no-daemon
         continue-on-error: true
@@ -178,7 +211,7 @@ jobs:
           retention-days: 7
           if-no-files-found: ignore
 
-      # ── 15. Debug APK ────────────────────────────────────────────────
+      # ── 16. Debug APK ────────────────────────────────────────────────
       - name: Build Debug APK
         run: ./gradlew assembleDebug --no-daemon --stacktrace
 
@@ -189,7 +222,7 @@ jobs:
           path: app/build/outputs/apk/debug/app-debug.apk
           retention-days: 30
 
-      # ── 16. Release APK (unsigned) ────────────────────────────────
+      # ── 17. Release APK (unsigned) ────────────────────────────────
       - name: Build Release APK (unsigned)
         run: ./gradlew assembleRelease --no-daemon --stacktrace
 
@@ -212,7 +245,6 @@ jobs:
       contents: write
 
     steps:
-      # Build job-এর APK artifact ডাউনলোড করো (re-build করার দরকার নেই)
       - name: Download Release APK artifact
         uses: actions/download-artifact@v4
         with:
@@ -234,7 +266,7 @@ jobs:
 
             ### সমর্থিত ডিভাইস
             - **আর্কিটেকচার**: arm64-v8a (সকল আধুনিক Android ফোন)
-            - **ন্যূনতম Android**: 7.0 (API 24)
+            - **ন্যূনতম Android**: 9.0 (API 28)
 
             > **নোট:** এটি unsigned APK। ইনস্টল করতে "Unknown sources" চালু রাখুন।
           draft: false
