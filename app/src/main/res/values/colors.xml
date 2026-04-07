@@ -10,6 +10,5 @@
     <color name="colorSecondary">#E6E6FA</color>
     <!-- Fix UI-16: Darkened for WCAG AA contrast ratio (~7:1 vs previous ~2.8:1) -->
     <color name="colorOnSecondary">#1A1A6B</color>
-    
-    <!-- Fix UI-17: Removed unused surface_background color -->
+    <color name="colorError">#B3261E</color>
 </resources>
