@@ -154,8 +154,8 @@ class MainActivity : AppCompatActivity() {
     private fun initEngine(isFastMode: Boolean) {
         lifecycleScope.launch(Dispatchers.IO) {
             val modelDir = File(getExternalFilesDir(null), "models")
-            val modelName = if (isFastMode) "PaddleOCR-VL-1.5-Q4_K_M.gguf" else "PaddleOCR-VL-1.5-Q8_0.gguf"
-            val projName = "PaddleOCR-VL-1.5-mmproj-f16.gguf"
+            val modelName = ModelDownloader.MAIN_MODEL_FILE
+            val projName = ModelDownloader.MMPROJ_FILE
 
             val modelPath = File(modelDir, modelName).absolutePath
             val mmprojPath = File(modelDir, projName).absolutePath

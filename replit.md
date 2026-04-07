@@ -47,12 +47,25 @@ export ANDROID_HOME=/home/runner/android-sdk && ./gradlew assembleDebug --no-dae
 ```
 Output: `app/build/outputs/apk/debug/app-debug.apk`
 
+## Model Files (HuggingFace)
+The correct filenames in `PaddlePaddle/PaddleOCR-VL-1.5-GGUF`:
+- **Main model**: `PaddleOCR-VL-1.5.gguf` (~935 MB)
+- **Multimodal projector**: `PaddleOCR-VL-1.5-mmproj.gguf` (~882 MB)
+
+Note: There are no quantized (Q4/Q8) versions in this repo. Both "Standard" modes download the same full-precision files.
+
 ## Code Fixes Applied
 
 ### Import Fixes
 1. **OcrEngine.kt**: Fixed broken `companion object` syntax — closing brace was missing, causing instance methods to be incorrectly scoped inside the companion object.
 2. **MainActivity.kt**: Added missing import `kotlinx.coroutines.currentCoroutineContext` and fixed `ensureActive()` call to use `currentCoroutineContext().ensureActive()` since it's called in a suspend function.
 3. **Resources**: Created missing mipmap icon files (`ic_launcher.png` / `ic_launcher_round.png`) in all density buckets (mdpi → xxxhdpi).
+
+### Download & URL Fixes
+9. **ModelDownloader.kt**: Fixed HTTP 404 errors — updated model URLs to use actual filenames (`PaddleOCR-VL-1.5.gguf`, `PaddleOCR-VL-1.5-mmproj.gguf`) instead of non-existent quantized versions. Added manual redirect handling with User-Agent header for HuggingFace CDN compatibility. Increased timeouts (connect: 30s, read: 60s) for large model files. Added zero-byte file check on re-download.
+10. **MainActivity.kt**: Updated `initEngine()` to reference `ModelDownloader.MAIN_MODEL_FILE` / `ModelDownloader.MMPROJ_FILE` constants instead of hardcoded wrong filenames.
+11. **AndroidManifest.xml**: Added `android:enableOnBackInvokedCallback="true"` to fix predictive back gesture warning.
+12. **activity_main.xml**: Updated radio button labels to remove misleading Q4/Q8 quantization references.
 
 ### Logic & Bug Fixes
 4. **MainActivity.kt** (`setupButtons`): Removed dead `Intent` variable that was built but never passed to the file picker launcher — the MIME filter was silently ignored.

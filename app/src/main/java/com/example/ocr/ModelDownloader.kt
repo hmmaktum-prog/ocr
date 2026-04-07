@@ -17,18 +17,18 @@ class ModelDownloader(private val context: Context) {
         private const val MAX_RETRIES = 3
         private const val RETRY_DELAY_MS = 2000L
         private const val BUFFER_SIZE = 65536 // 64KB buffer for faster downloads
-        private const val CONNECT_TIMEOUT = 15000
-        private const val READ_TIMEOUT = 30000
+        private const val CONNECT_TIMEOUT = 30000
+        private const val READ_TIMEOUT = 60000
+
+        const val BASE_REPO = "https://huggingface.co/PaddlePaddle/PaddleOCR-VL-1.5-GGUF/resolve/main"
+        const val MAIN_MODEL_FILE = "PaddleOCR-VL-1.5.gguf"
+        const val MMPROJ_FILE = "PaddleOCR-VL-1.5-mmproj.gguf"
     }
 
-    private val fastModelUrls = listOf(
-        "https://huggingface.co/PaddlePaddle/PaddleOCR-VL-1.5-GGUF/resolve/main/PaddleOCR-VL-1.5-Q4_K_M.gguf",
-        "https://huggingface.co/PaddlePaddle/PaddleOCR-VL-1.5-GGUF/resolve/main/PaddleOCR-VL-1.5-mmproj-f16.gguf"
-    )
-
-    private val accurateModelUrls = listOf(
-        "https://huggingface.co/PaddlePaddle/PaddleOCR-VL-1.5-GGUF/resolve/main/PaddleOCR-VL-1.5-Q8_0.gguf",
-        "https://huggingface.co/PaddlePaddle/PaddleOCR-VL-1.5-GGUF/resolve/main/PaddleOCR-VL-1.5-mmproj-f16.gguf"
+    // Both fast and accurate use the same model (no quantized versions available in the repo)
+    private val modelUrls = listOf(
+        "$BASE_REPO/$MAIN_MODEL_FILE",
+        "$BASE_REPO/$MMPROJ_FILE"
     )
 
     suspend fun checkAndDownloadModels(
@@ -41,28 +41,27 @@ class ModelDownloader(private val context: Context) {
                 val modelDir = File(context.getExternalFilesDir(null), "models")
                 if (!modelDir.exists()) modelDir.mkdirs()
 
-                val urls = if (fastMode) fastModelUrls else accurateModelUrls
+                val urls = modelUrls
                 val totalFiles = urls.size
                 for (i in urls.indices) {
-                    coroutineContext.ensureActive() // Support cancellation
+                    coroutineContext.ensureActive()
 
                     val urlStr = urls[i]
                     val fileName = urlStr.substringAfterLast("/")
                     val file = File(modelDir, fileName)
 
-                    if (!file.exists()) {
+                    if (!file.exists() || file.length() == 0L) {
                         downloadFileWithRetry(urlStr, file, i, totalFiles, onProgress)
                     } else {
-                        // File already exists, report progress
                         val progress = ((i + 1) * 100) / totalFiles
                         onProgress(progress)
-                        Log.i(TAG, "Model file already exists: $fileName")
+                        Log.i(TAG, "Model file already exists: $fileName (${file.length()} bytes)")
                     }
                 }
                 onComplete(true)
             } catch (e: CancellationException) {
                 Log.i(TAG, "Download cancelled")
-                throw e // Re-throw to properly cancel coroutine
+                throw e
             } catch (e: Exception) {
                 Log.e(TAG, "Model download failed", e)
                 onComplete(false)
@@ -107,17 +106,41 @@ class ModelDownloader(private val context: Context) {
         var connection: HttpURLConnection? = null
 
         try {
-            val url = URL(urlStr)
-            connection = url.openConnection() as HttpURLConnection
-            connection.connectTimeout = CONNECT_TIMEOUT
-            connection.readTimeout = READ_TIMEOUT
-            connection.connect()
+            var currentUrl = urlStr
+            var redirectCount = 0
+            val maxRedirects = 10
 
-            if (connection.responseCode != HttpURLConnection.HTTP_OK) {
-                throw Exception("Server returned HTTP ${connection.responseCode} ${connection.responseMessage}")
+            // Manually follow redirects to handle cross-protocol (http→https) cases
+            while (redirectCount <= maxRedirects) {
+                val url = URL(currentUrl)
+                connection = url.openConnection() as HttpURLConnection
+                connection.connectTimeout = CONNECT_TIMEOUT
+                connection.readTimeout = READ_TIMEOUT
+                connection.instanceFollowRedirects = false
+                connection.setRequestProperty("User-Agent", "Mozilla/5.0 (Android)")
+                connection.connect()
+
+                val code = connection.responseCode
+                if (code in 300..399) {
+                    val location = connection.getHeaderField("Location")
+                        ?: throw Exception("Redirect with no Location header")
+                    connection.disconnect()
+                    currentUrl = location
+                    redirectCount++
+                    continue
+                }
+
+                if (code != HttpURLConnection.HTTP_OK) {
+                    throw Exception("Server returned HTTP $code ${connection.responseMessage}")
+                }
+                break
             }
 
-            val fileLength = connection.contentLength.toLong()
+            if (redirectCount > maxRedirects) {
+                throw Exception("Too many redirects")
+            }
+
+            val fileLength = connection!!.contentLengthLong
             val fileProgressBase = (fileIndex * 100) / totalFiles
             val fileProgressMultiplier = 100 / totalFiles
 
@@ -127,14 +150,13 @@ class ModelDownloader(private val context: Context) {
                     var total: Long = 0
                     var count: Int
                     while (input.read(data).also { count = it } != -1) {
-                        coroutineContext.ensureActive() // Check cancellation during download
+                        coroutineContext.ensureActive()
                         total += count
                         if (fileLength > 0) {
                             val fileRelativeProgress = ((total * 100) / fileLength).toInt()
                             val overallProgress = fileProgressBase + (fileRelativeProgress * fileProgressMultiplier / 100)
                             onProgress(overallProgress.coerceAtMost(100))
                         } else {
-                            // Unknown content length — show indeterminate-style progress
                             val estimatedProgress = fileProgressBase + (fileProgressMultiplier / 2)
                             onProgress(estimatedProgress.coerceAtMost(100))
                         }
@@ -144,17 +166,15 @@ class ModelDownloader(private val context: Context) {
                 }
             }
 
-
             // Atomic rename: only replace target after successful download
             if (!tempFile.renameTo(targetFile)) {
-                // renameTo can fail on some filesystems, fallback to copy
                 tempFile.copyTo(targetFile, overwrite = true)
                 tempFile.delete()
             }
-            Log.i(TAG, "Downloaded: ${targetFile.name}")
+            Log.i(TAG, "Downloaded: ${targetFile.name} (${targetFile.length()} bytes)")
 
         } catch (e: Exception) {
-            tempFile.delete() // Clean up partial download
+            tempFile.delete()
             throw e
         } finally {
             connection?.disconnect()

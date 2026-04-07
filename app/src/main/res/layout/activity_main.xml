@@ -84,14 +84,14 @@
                 android:id="@+id/radioFast"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Fast (Q4)"
+                android:text="Standard"
                 android:checked="true" />
 
             <RadioButton
                 android:id="@+id/radioAccurate"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Accurate (Q8)" />
+                android:text="Standard (Full)" />
         </RadioGroup>
 
         <com.google.android.material.button.MaterialButton
