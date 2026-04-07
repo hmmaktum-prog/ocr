@@ -204,6 +204,13 @@ class MainActivity : AppCompatActivity() {
                             getString(R.string.dialog_binary_missing_message)
                         )
                     }
+                    is LlamaServerManager.StartResult.UnsupportedAbi -> {
+                        binding.statusText.text = getString(R.string.status_engine_failed)
+                        showEngineErrorDialog(
+                            getString(R.string.dialog_unsupported_abi_title),
+                            getString(R.string.dialog_unsupported_abi_message, result.deviceAbi)
+                        )
+                    }
                     is LlamaServerManager.StartResult.ProcessCrashed -> {
                         val detail = result.output.take(300).ifEmpty { "কোনো আউটপুট নেই" }
                         binding.statusText.text = getString(R.string.status_engine_failed)

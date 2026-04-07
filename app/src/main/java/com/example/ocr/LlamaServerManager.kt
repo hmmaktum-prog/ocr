@@ -1,6 +1,7 @@
 package com.example.ocr
 
 import android.content.Context
+import android.os.Build
 import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -17,6 +18,11 @@ class LlamaServerManager(private val context: Context) {
 
         // ELF magic bytes — একটি বৈধ Linux/Android binary এভাবে শুরু হয়
         private val ELF_MAGIC = byteArrayOf(0x7F, 0x45, 0x4C, 0x46)
+
+        // arm64-v8a ছাড়া অন্য ABI-তে ARM translation থাকতে পারে (API 30+)
+        private val SUPPORTED_ABIS: Array<String> get() = Build.SUPPORTED_ABIS
+        private val isArm64Supported: Boolean get() = SUPPORTED_ABIS.contains("arm64-v8a")
+        private val primaryAbi: String get() = SUPPORTED_ABIS.firstOrNull() ?: "unknown"
     }
 
     private var process: Process? = null
@@ -32,6 +38,7 @@ class LlamaServerManager(private val context: Context) {
     sealed class StartResult {
         object Success : StartResult()
         object InvalidBinary : StartResult()
+        data class UnsupportedAbi(val deviceAbi: String) : StartResult()
         data class ProcessCrashed(val output: String) : StartResult()
         data class Timeout(val output: String) : StartResult()
         data class Error(val message: String) : StartResult()
@@ -39,19 +46,27 @@ class LlamaServerManager(private val context: Context) {
 
     suspend fun extractAndStartServer(modelPath: String, mmprojPath: String): StartResult {
         return withContext(Dispatchers.IO) {
+
+            // Step 0: ABI পরীক্ষা করো
+            Log.i(TAG, "Device supported ABIs: ${SUPPORTED_ABIS.joinToString()}")
+            if (!isArm64Supported) {
+                Log.e(TAG, "Device does not support arm64-v8a. Primary ABI: $primaryAbi")
+                return@withContext StartResult.UnsupportedAbi(primaryAbi)
+            }
+
             val serverFile = File(context.filesDir, "llama-server")
 
-            // Step 1: Extract the binary from assets
+            // Step 1: Assets থেকে binary extract করো
             try {
                 val assetBytes = context.assets.open("llama-server").use { it.readBytes() }
 
-                // Always re-extract if the existing file differs in size
+                // আকার ভিন্ন হলে নতুন করে extract করো
                 if (!serverFile.exists() || serverFile.length() != assetBytes.size.toLong()) {
+                    Log.i(TAG, "Extracting llama-server binary (${assetBytes.size / 1024}KB)...")
                     serverFile.writeBytes(assetBytes)
                 }
 
                 // Step 2: ELF magic byte যাচাই — placeholder হলে সাথে সাথে ফিরে যাও
-                // readNBytes() requires API 33; manual read works from API 24
                 val magic = serverFile.inputStream().use { stream ->
                     val buf = ByteArray(4)
                     var offset = 0
@@ -68,7 +83,9 @@ class LlamaServerManager(private val context: Context) {
                     return@withContext StartResult.InvalidBinary
                 }
 
+                Log.i(TAG, "llama-server ELF verified (${serverFile.length() / 1024 / 1024}MB)")
                 serverFile.setExecutable(true)
+
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to extract llama-server binary", e)
                 return@withContext StartResult.Error("Binary extraction failed: ${e.message}")
@@ -99,7 +116,8 @@ class LlamaServerManager(private val context: Context) {
                     "--host", "127.0.0.1",
                     "-cb"
                 )
-                Log.i(TAG, "Starting: ${cmd.joinToString(" ")}")
+                Log.i(TAG, "Starting llama-server on arm64 (device ABI: $primaryAbi)")
+                Log.d(TAG, "Command: ${cmd.joinToString(" ")}")
 
                 val pb = ProcessBuilder(cmd)
                 pb.directory(context.filesDir)
@@ -129,7 +147,7 @@ class LlamaServerManager(private val context: Context) {
         outputThread.isDaemon = true
         outputThread.start()
 
-        val maxWaitMs = 120_000L  // 2 মিনিট পর্যন্ত অপেক্ষা (বড় মডেল লোড হতে সময় লাগে)
+        val maxWaitMs = 120_000L
         val checkIntervalMs = 1_000L
         var elapsed = 0L
 
@@ -137,7 +155,6 @@ class LlamaServerManager(private val context: Context) {
             delay(checkIntervalMs)
             elapsed += checkIntervalMs
 
-            // প্রসেস মরে গেছে কিনা দেখো
             if (!proc.isAliveCompat()) {
                 val exitCode = proc.exitValue()
                 val output = outputBuilder.toString().trim()
@@ -145,7 +162,6 @@ class LlamaServerManager(private val context: Context) {
                 return StartResult.ProcessCrashed("Exit code: $exitCode\n$output")
             }
 
-            // Health endpoint চেক করো
             try {
                 val conn = URL("http://127.0.0.1:${SERVER_PORT}/health")
                     .openConnection() as HttpURLConnection

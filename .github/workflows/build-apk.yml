@@ -9,9 +9,9 @@ on:
     branches: [ "main" ]
   workflow_dispatch:
 
-# Node.js 24 অপ্ট-ইন (Node.js 20 June 2026 থেকে deprecated হবে)
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  LLAMA_CPP_TAG: b8683
 
 jobs:
   build:
@@ -21,11 +21,11 @@ jobs:
       contents: read
 
     steps:
-      # ── 1. সোর্স কোড নামানো ──────────────────────────────────────
+      # ── 1. সোর্স কোড নামানো ───────────────────────────────────────
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # ── 2. Java 17 সেটআপ ──────────────────────────────────────────
+      # ── 2. Java 17 সেটআপ ───────────────────────────────────────────
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
@@ -33,30 +33,124 @@ jobs:
           distribution: 'temurin'
           cache: gradle
 
-      # ── 3. Android SDK পাথ সেট করা ───────────────────────────────
-      - name: Create local.properties with Android SDK path
+      # ── 3. Android SDK পাথ সেট করা ────────────────────────────────
+      - name: Create local.properties
         run: echo "sdk.dir=$ANDROID_HOME" > local.properties
 
-      # ── 4. Gradle চালানোর অনুমতি দেওয়া ──────────────────────────
+      # ── 4. Gradle permission ────────────────────────────────────────
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
-      # ── 5. Gradle cache (দ্রুত বিল্ডের জন্য) ────────────────────
-      - name: Cache Gradle wrapper and dependencies
+      # ── 5. Gradle cache ─────────────────────────────────────────────
+      - name: Cache Gradle
         uses: actions/cache@v4
         with:
           path: |
             ~/.gradle/caches
             ~/.gradle/wrapper
           key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
-          restore-keys: |
-            ${{ runner.os }}-gradle-
+          restore-keys: ${{ runner.os }}-gradle-
 
-      # ── 6. Dependency যাচাই ───────────────────────────────────────
+      # ── 6. Gradle wrapper যাচাই ─────────────────────────────────────
       - name: Validate Gradle wrapper
         uses: gradle/actions/wrapper-validation@v3
 
-      # ── 7. Lint চেক (কোড মান যাচাই) ─────────────────────────────
+      # ═══════════════════════════════════════════════════════════════
+      # llama-server Android arm64-v8a binary build
+      # ═══════════════════════════════════════════════════════════════
+
+      # ── 7. Build dependencies ───────────────────────────────────────
+      - name: Install CMake and Ninja
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y cmake ninja-build
+
+      # ── 8. NDK পাথ নির্ধারণ করা ────────────────────────────────────
+      - name: Detect Android NDK path
+        run: |
+          if [ -n "$ANDROID_NDK_HOME" ] && [ -d "$ANDROID_NDK_HOME" ]; then
+            echo "NDK_PATH=$ANDROID_NDK_HOME" >> $GITHUB_ENV
+          elif [ -n "$ANDROID_NDK" ] && [ -d "$ANDROID_NDK" ]; then
+            echo "NDK_PATH=$ANDROID_NDK" >> $GITHUB_ENV
+          elif [ -n "$ANDROID_NDK_LATEST_HOME" ] && [ -d "$ANDROID_NDK_LATEST_HOME" ]; then
+            echo "NDK_PATH=$ANDROID_NDK_LATEST_HOME" >> $GITHUB_ENV
+          else
+            # Fallback: find any installed NDK
+            NDK_DIR=$(ls -d $ANDROID_HOME/ndk/* 2>/dev/null | tail -1)
+            if [ -n "$NDK_DIR" ]; then
+              echo "NDK_PATH=$NDK_DIR" >> $GITHUB_ENV
+            else
+              echo "Installing NDK 26.3.11579264 ..."
+              $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "ndk;26.3.11579264" > /dev/null
+              echo "NDK_PATH=$ANDROID_HOME/ndk/26.3.11579264" >> $GITHUB_ENV
+            fi
+          fi
+          echo "NDK found: $NDK_PATH"
+
+      # ── 9. llama-server build cache ─────────────────────────────────
+      - name: Cache llama-server binary (arm64-v8a)
+        id: llama-cache
+        uses: actions/cache@v4
+        with:
+          path: /tmp/llama-server-arm64
+          key: llama-android-arm64-${{ env.LLAMA_CPP_TAG }}-v1
+
+      # ── 10. llama.cpp clone ─────────────────────────────────────────
+      - name: Clone llama.cpp source
+        if: steps.llama-cache.outputs.cache-hit != 'true'
+        run: |
+          git clone --depth 1 --branch $LLAMA_CPP_TAG \
+            https://github.com/ggerganov/llama.cpp.git /tmp/llama-cpp
+          echo "Cloned llama.cpp $LLAMA_CPP_TAG"
+
+      # ── 11. llama-server Android arm64 build ───────────────────────
+      - name: Build llama-server for Android arm64-v8a
+        if: steps.llama-cache.outputs.cache-hit != 'true'
+        run: |
+          cmake -B /tmp/llama-build \
+            -S /tmp/llama-cpp \
+            -G Ninja \
+            -DCMAKE_TOOLCHAIN_FILE="$NDK_PATH/build/cmake/android.toolchain.cmake" \
+            -DANDROID_ABI=arm64-v8a \
+            -DANDROID_PLATFORM=android-24 \
+            -DLLAMA_BUILD_SERVER=ON \
+            -DLLAMA_BUILD_TESTS=OFF \
+            -DLLAMA_BUILD_EXAMPLES=OFF \
+            -DLLAMA_CURL=OFF \
+            -DGGML_NATIVE=OFF \
+            -DGGML_OPENMP=OFF \
+            -DCMAKE_BUILD_TYPE=Release
+
+          # Build server (try specific target, fallback to all)
+          cmake --build /tmp/llama-build --target llama-server -j$(nproc) \
+            || cmake --build /tmp/llama-build -j$(nproc)
+
+          # Binary খুঁজে cache করো
+          SERVER_BIN=$(find /tmp/llama-build -type f -name "llama-server" \
+            ! -path "*/CMakeFiles/*" | head -1)
+          if [ -z "$SERVER_BIN" ]; then
+            echo "❌ llama-server binary not found!"
+            find /tmp/llama-build/bin -type f 2>/dev/null
+            exit 1
+          fi
+          cp "$SERVER_BIN" /tmp/llama-server-arm64
+          echo "✅ Built: $(ls -lh /tmp/llama-server-arm64)"
+          file /tmp/llama-server-arm64
+
+      # ── 12. Binary → APK assets-এ রাখো ───────────────────────────
+      - name: Embed llama-server into APK assets
+        run: |
+          cp /tmp/llama-server-arm64 app/src/main/assets/llama-server
+          echo "✅ llama-server embedded: $(ls -lh app/src/main/assets/llama-server)"
+          file app/src/main/assets/llama-server
+          # ELF header যাচাই
+          head -c 4 app/src/main/assets/llama-server | xxd | head -1
+
+      # ═══════════════════════════════════════════════════════════════
+      # APK Build
+      # ═══════════════════════════════════════════════════════════════
+
+      # ── 13. Lint চেক ────────────────────────────────────────────────
       - name: Run Lint
         run: ./gradlew lintDebug --no-daemon
         continue-on-error: true
@@ -70,7 +164,7 @@ jobs:
           retention-days: 7
           if-no-files-found: ignore
 
-      # ── 8. Unit Test চালানো ───────────────────────────────────────
+      # ── 14. Unit Test ───────────────────────────────────────────────
       - name: Run Unit Tests
         run: ./gradlew testDebugUnitTest --no-daemon
         continue-on-error: true
@@ -84,7 +178,7 @@ jobs:
           retention-days: 7
           if-no-files-found: ignore
 
-      # ── 9. Debug APK বিল্ড ────────────────────────────────────────
+      # ── 15. Debug APK ────────────────────────────────────────────────
       - name: Build Debug APK
         run: ./gradlew assembleDebug --no-daemon --stacktrace
 
@@ -95,18 +189,20 @@ jobs:
           path: app/build/outputs/apk/debug/app-debug.apk
           retention-days: 30
 
-      # ── 10. Release APK বিল্ড (unsigned) ─────────────────────────
+      # ── 16. Release APK (unsigned) ────────────────────────────────
       - name: Build Release APK (unsigned)
         run: ./gradlew assembleRelease --no-daemon --stacktrace
 
-      - name: Upload Release APK (unsigned)
+      - name: Upload Release APK
         uses: actions/upload-artifact@v4
         with:
           name: app-release-unsigned-${{ github.run_number }}
           path: app/build/outputs/apk/release/app-release-unsigned.apk
           retention-days: 30
 
-  # ── Release তৈরি (শুধু tag push হলে) ────────────────────────────
+  # ══════════════════════════════════════════════════════════════════
+  # GitHub Release (tag push হলেই শুধু)
+  # ══════════════════════════════════════════════════════════════════
   release:
     name: Create GitHub Release
     runs-on: ubuntu-latest
@@ -116,47 +212,31 @@ jobs:
       contents: write
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
+      # Build job-এর APK artifact ডাউনলোড করো (re-build করার দরকার নেই)
+      - name: Download Release APK artifact
+        uses: actions/download-artifact@v4
         with:
-          java-version: '17'
-          distribution: 'temurin'
-          cache: gradle
-
-      - name: Create local.properties with Android SDK path
-        run: echo "sdk.dir=$ANDROID_HOME" > local.properties
-
-      - name: Grant execute permission for gradlew
-        run: chmod +x gradlew
-
-      - name: Cache Gradle wrapper and dependencies
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.gradle/caches
-            ~/.gradle/wrapper
-          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
-          restore-keys: |
-            ${{ runner.os }}-gradle-
-
-      - name: Build Release APK
-        run: ./gradlew assembleRelease --no-daemon
+          name: app-release-unsigned-${{ github.run_number }}
+          path: ./apk
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: app/build/outputs/apk/release/app-release-unsigned.apk
+          files: ./apk/app-release-unsigned.apk
           name: "PaddleOCR-VL ${{ github.ref_name }}"
           body: |
             ## PaddleOCR-VL ${{ github.ref_name }}
-            
+
+            **llama-server**: llama.cpp ${{ env.LLAMA_CPP_TAG }} (Android arm64-v8a)
+
             ### ডাউনলোড
             নিচের APK ফাইলটি ডাউনলোড করে Android ডিভাইসে ইনস্টল করুন।
-            
-            > **নোট:** এটি unsigned release APK। ইনস্টল করতে "Unknown sources" চালু রাখুন।
+
+            ### সমর্থিত ডিভাইস
+            - **আর্কিটেকচার**: arm64-v8a (সকল আধুনিক Android ফোন)
+            - **ন্যূনতম Android**: 7.0 (API 24)
+
+            > **নোট:** এটি unsigned APK। ইনস্টল করতে "Unknown sources" চালু রাখুন।
           draft: false
           prerelease: false
         env:
