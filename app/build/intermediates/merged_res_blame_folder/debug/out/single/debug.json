@@ -1,0 +1,50 @@
+[
+    {
+        "merged": "com.example.ocr.app-merged_res-36:/mipmap-xxhdpi_ic_launcher_round.png.flat",
+        "source": "com.example.ocr.app-main-38:/mipmap-xxhdpi/ic_launcher_round.png"
+    },
+    {
+        "merged": "com.example.ocr.app-merged_res-36:/mipmap-xxxhdpi_ic_launcher.png.flat",
+        "source": "com.example.ocr.app-main-38:/mipmap-xxxhdpi/ic_launcher.png"
+    },
+    {
+        "merged": "com.example.ocr.app-merged_res-36:/mipmap-xhdpi_ic_launcher.png.flat",
+        "source": "com.example.ocr.app-main-38:/mipmap-xhdpi/ic_launcher.png"
+    },
+    {
+        "merged": "/home/runner/.gradle/daemon/8.2/com.example.ocr.app-merged_res-36:/layout_activity_main.xml.flat",
+        "source": "/home/runner/.gradle/daemon/8.2/com.example.ocr.app-main-38:/layout/activity_main.xml"
+    },
+    {
+        "merged": "/home/runner/.gradle/daemon/8.2/com.example.ocr.app-merged_res-36:/xml_file_paths.xml.flat",
+        "source": "/home/runner/.gradle/daemon/8.2/com.example.ocr.app-main-38:/xml/file_paths.xml"
+    },
+    {
+        "merged": "com.example.ocr.app-merged_res-36:/mipmap-hdpi_ic_launcher.png.flat",
+        "source": "com.example.ocr.app-main-38:/mipmap-hdpi/ic_launcher.png"
+    },
+    {
+        "merged": "com.example.ocr.app-merged_res-36:/mipmap-mdpi_ic_launcher_round.png.flat",
+        "source": "com.example.ocr.app-main-38:/mipmap-mdpi/ic_launcher_round.png"
+    },
+    {
+        "merged": "com.example.ocr.app-merged_res-36:/mipmap-mdpi_ic_launcher.png.flat",
+        "source": "com.example.ocr.app-main-38:/mipmap-mdpi/ic_launcher.png"
+    },
+    {
+        "merged": "com.example.ocr.app-merged_res-36:/mipmap-xxhdpi_ic_launcher.png.flat",
+        "source": "com.example.ocr.app-main-38:/mipmap-xxhdpi/ic_launcher.png"
+    },
+    {
+        "merged": "com.example.ocr.app-merged_res-36:/mipmap-xhdpi_ic_launcher_round.png.flat",
+        "source": "com.example.ocr.app-main-38:/mipmap-xhdpi/ic_launcher_round.png"
+    },
+    {
+        "merged": "com.example.ocr.app-merged_res-36:/mipmap-xxxhdpi_ic_launcher_round.png.flat",
+        "source": "com.example.ocr.app-main-38:/mipmap-xxxhdpi/ic_launcher_round.png"
+    },
+    {
+        "merged": "com.example.ocr.app-merged_res-36:/mipmap-hdpi_ic_launcher_round.png.flat",
+        "source": "com.example.ocr.app-main-38:/mipmap-hdpi/ic_launcher_round.png"
+    }
+]

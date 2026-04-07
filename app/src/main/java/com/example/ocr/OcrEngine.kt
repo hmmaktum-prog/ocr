@@ -20,6 +20,8 @@ import java.util.zip.ZipOutputStream
 class OcrEngine {
     companion object {
         private const val TAG = "OcrEngine"
+    }
+
     private val client = OkHttpClient.Builder()
         .connectTimeout(30, TimeUnit.SECONDS)
         .readTimeout(120, TimeUnit.SECONDS)

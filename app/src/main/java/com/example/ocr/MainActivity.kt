@@ -21,6 +21,8 @@ import com.example.ocr.databinding.ActivityMainBinding
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -260,7 +262,7 @@ class MainActivity : AppCompatActivity() {
             val pageCount = renderer.pageCount
 
             for (i in 0 until pageCount) {
-                kotlinx.coroutines.ensureActive() // Support cancellation
+                currentCoroutineContext().ensureActive() // Support cancellation
 
                 withContext(Dispatchers.Main) {
                     binding.progressBar.apply {
