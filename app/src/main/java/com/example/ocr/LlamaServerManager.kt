@@ -1,7 +1,6 @@
 package com.example.ocr
 
 import android.content.Context
-import android.content.res.AssetFileDescriptor
 import android.os.Build
 import android.util.Log
 import kotlinx.coroutines.Dispatchers
@@ -17,8 +16,6 @@ class LlamaServerManager(private val context: Context) {
         private const val TAG = "LlamaServerManager"
         private const val SERVER_PORT = 8080
         const val SERVER_URL = "http://127.0.0.1:${SERVER_PORT}/completion"
-        private const val COPY_BUFFER_SIZE = 1048576 // 1MB chunks — never loads whole file
-
         // ELF magic bytes — একটি বৈধ Linux/Android binary এভাবে শুরু হয়
         private val ELF_MAGIC = byteArrayOf(0x7F, 0x45, 0x4C, 0x46)
 
@@ -75,46 +72,22 @@ class LlamaServerManager(private val context: Context) {
                 return@withContext StartResult.UnsupportedAbi(primaryAbi)
             }
 
-            val serverFile = File(context.filesDir, "llama-server")
+            // nativeLibraryDir থেকে binary নাও — Android নিজেই এখানে install করে, noexec সমস্যা নেই
+            val nativeLibDir = context.applicationInfo.nativeLibraryDir
+            val serverFile = File(nativeLibDir, "libllama_server.so")
 
-            // Step 1: Assets থেকে binary extract করো (streaming — OOM হবে না)
+            Log.i(TAG, "Looking for llama-server at: ${serverFile.absolutePath}")
+
+            // Step 1: Binary আছে কিনা যাচাই করো
+            if (!serverFile.exists()) {
+                Log.e(TAG, "libllama_server.so not found in nativeLibraryDir: $nativeLibDir")
+                return@withContext StartResult.Error("Server binary not found: ${serverFile.absolutePath}")
+            }
+
+            Log.i(TAG, "Found: libllama_server.so (${serverFile.length() / 1024 / 1024}MB)")
+
+            // Step 2: ELF magic byte যাচাই — শুধু প্রথম 4 byte পড়ি
             try {
-                // Asset-এর আকার জানো — পুরো ফাইল memory-তে লোড না করেই
-                val assetSize: Long = try {
-                    context.assets.openFd("llama-server").use { fd: AssetFileDescriptor ->
-                        fd.length
-                    }
-                } catch (e: Exception) {
-                    // openFd কাজ না করলে (compressed asset) fallback: সরাসরি copy করো
-                    -1L
-                }
-
-                val needsExtract = !serverFile.exists() ||
-                    (assetSize > 0 && serverFile.length() != assetSize)
-
-                if (needsExtract) {
-                    Log.i(TAG, "Extracting llama-server binary (streaming, no OOM)...")
-                    val tmpFile = File(context.filesDir, "llama-server.tmp")
-
-                    // Stream করে copy — কখনো পুরো ফাইল RAM-এ যায় না
-                    context.assets.open("llama-server").use { input ->
-                        tmpFile.outputStream().use { output ->
-                            input.copyTo(output, bufferSize = COPY_BUFFER_SIZE)
-                        }
-                    }
-
-                    // Atomic rename: সম্পূর্ণ না হলে replace হবে না
-                    if (!tmpFile.renameTo(serverFile)) {
-                        tmpFile.copyTo(serverFile, overwrite = true)
-                        tmpFile.delete()
-                    }
-
-                    Log.i(TAG, "Extracted: ${serverFile.length() / 1024 / 1024}MB")
-                } else {
-                    Log.i(TAG, "llama-server already extracted (${serverFile.length() / 1024 / 1024}MB), skipping")
-                }
-
-                // Step 2: ELF magic byte যাচাই — শুধু প্রথম 4 byte পড়ি
                 val magic = serverFile.inputStream().use { stream ->
                     val buf = ByteArray(4)
                     var offset = 0
@@ -126,22 +99,18 @@ class LlamaServerManager(private val context: Context) {
                     buf
                 }
                 if (!magic.contentEquals(ELF_MAGIC)) {
-                    // Fix: readText() OOM এড়াতে শুধু প্রথম 200 byte পড়ি
                     val preview = serverFile.inputStream().use { stream ->
                         val buf = ByteArray(200)
                         val read = stream.read(buf)
                         if (read > 0) String(buf, 0, read, Charsets.UTF_8) else "(empty)"
                     }
-                    Log.e(TAG, "llama-server is not a valid ELF binary. Content: $preview")
+                    Log.e(TAG, "libllama_server.so is not a valid ELF binary. Content: $preview")
                     return@withContext StartResult.InvalidBinary
                 }
-
                 Log.i(TAG, "llama-server ELF verified (${serverFile.length() / 1024 / 1024}MB)")
-                serverFile.setExecutable(true)
-
             } catch (e: Exception) {
-                Log.e(TAG, "Failed to extract llama-server binary", e)
-                return@withContext StartResult.Error("Binary extraction failed: ${e.message}")
+                Log.e(TAG, "Failed to verify llama-server binary", e)
+                return@withContext StartResult.Error("Binary verification failed: ${e.message}")
             }
 
             // Step 3: Model ফাইল আছে কিনা যাচাই
