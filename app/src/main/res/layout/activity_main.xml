@@ -70,7 +70,7 @@
             android:id="@+id/modeSelectionTitle"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Select Model Type"
+            android:text="@string/label_select_model_type"
             android:textStyle="bold" />
 
         <RadioGroup
@@ -84,14 +84,14 @@
                 android:id="@+id/radioFast"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Standard"
+                android:text="@string/label_radio_standard"
                 android:checked="true" />
 
             <RadioButton
                 android:id="@+id/radioAccurate"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Standard (Full)" />
+                android:text="@string/label_radio_standard_full" />
         </RadioGroup>
 
         <com.google.android.material.button.MaterialButton
@@ -99,7 +99,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
-            android:text="Download &#38; Initialize Model" />
+            android:text="@string/btn_download_model" />
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btnSelectFile"

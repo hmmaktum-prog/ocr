@@ -5,7 +5,7 @@ An Android application that uses multimodal LLMs (PaddleOCR-VL-1.5) to transcrib
 
 ## Tech Stack
 - **Language**: Kotlin 1.9.0
-- **Platform**: Android (Min SDK 24, Target SDK 34)
+- **Platform**: Android (Min SDK 24, Target SDK 35, Compile SDK 35)
 - **Build System**: Gradle with Kotlin DSL (build.gradle.kts)
 - **UI**: Android XML Layouts with View Binding
 - **Networking**: OkHttp 4.12.0 (local server communication)
@@ -27,6 +27,7 @@ app/
       values/strings.xml         # String resources
       values/themes.xml          # App theme (Material Design)
       xml/file_paths.xml         # FileProvider paths config
+      xml/data_extraction_rules.xml  # Android 12+ backup/transfer rules
       mipmap-*/ic_launcher.png   # App icons (all densities)
 ```
 
@@ -75,6 +76,15 @@ Note: There are no quantized (Q4/Q8) versions in this repo. Both "Standard" mode
 
 ### GitHub Actions
 8. **`.github/workflows/build-apk.yml`**: Removed broken NDK installation step, removed unnecessary `gradle/actions/setup-gradle` duplication, added `--no-daemon --stacktrace` flags, added `workflow_dispatch` trigger, increased APK artifact retention to 30 days.
+
+### API Compatibility & Lint Fixes (Latest)
+13. **`LlamaServerManager.kt`**: Replaced `Process.isAlive()` (API 26+) with `isAliveCompat()` extension helper using `exitValue()` try/catch — works from API 24. Also replaced `InputStream.readNBytes()` (API 33+) with a manual read loop.
+14. **`app/build.gradle.kts`**: Updated `compileSdk`/`targetSdk` from 34 → 35 (Android 15). Updated all dependencies to latest stable versions. Added lint `disable` block for non-functional icon warnings.
+15. **`AndroidManifest.xml`**: Added `xmlns:tools` namespace + `tools:targetApi="33"` on `<application>` to suppress `UnusedAttribute` lint warning for `enableOnBackInvokedCallback`. Added `android:dataExtractionRules` reference for Android 12+ backup compliance.
+16. **`res/xml/data_extraction_rules.xml`**: New file — defines Android 12+ (API 31+) data extraction rules, excluding all domains from cloud backup and device transfer.
+17. **`res/values/strings.xml`**: Added 4 missing string resources (`btn_download_model`, `label_select_model_type`, `label_radio_standard`, `label_radio_standard_full`) to fix `HardcodedText` lint warnings.
+18. **`res/layout/activity_main.xml`**: Replaced 4 hardcoded text attributes with `@string/` references.
+19. **`.github/workflows/build-apk.yml`** (re-fix): Added `FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true` env var (Node.js 20 → 24 opt-in, mandatory June 2026). Added `permissions: contents: write` to the `release` job — without this, `softprops/action-gh-release` would fail with 403 when pushing a version tag. Changed artifact `if-no-files-found` from `warn` → `ignore` for lint/test reports.
 
 ## App Workflow
 1. User taps "Download" to fetch GGUF models from HuggingFace

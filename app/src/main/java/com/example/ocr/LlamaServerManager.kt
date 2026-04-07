@@ -21,6 +21,14 @@ class LlamaServerManager(private val context: Context) {
 
     private var process: Process? = null
 
+    // Process.isAlive() requires API 26; this helper works from API 24
+    private fun Process.isAliveCompat(): Boolean = try {
+        exitValue()
+        false
+    } catch (_: IllegalThreadStateException) {
+        true
+    }
+
     sealed class StartResult {
         object Success : StartResult()
         object InvalidBinary : StartResult()
@@ -43,7 +51,17 @@ class LlamaServerManager(private val context: Context) {
                 }
 
                 // Step 2: ELF magic byte যাচাই — placeholder হলে সাথে সাথে ফিরে যাও
-                val magic = serverFile.inputStream().use { it.readNBytes(4) }
+                // readNBytes() requires API 33; manual read works from API 24
+                val magic = serverFile.inputStream().use { stream ->
+                    val buf = ByteArray(4)
+                    var offset = 0
+                    while (offset < 4) {
+                        val n = stream.read(buf, offset, 4 - offset)
+                        if (n == -1) break
+                        offset += n
+                    }
+                    buf
+                }
                 if (!magic.contentEquals(ELF_MAGIC)) {
                     val content = serverFile.readText().take(200)
                     Log.e(TAG, "llama-server is not a valid ELF binary. Content: $content")
@@ -120,7 +138,7 @@ class LlamaServerManager(private val context: Context) {
             elapsed += checkIntervalMs
 
             // প্রসেস মরে গেছে কিনা দেখো
-            if (!proc.isAlive) {
+            if (!proc.isAliveCompat()) {
                 val exitCode = proc.exitValue()
                 val output = outputBuilder.toString().trim()
                 Log.e(TAG, "llama-server exited with code $exitCode. Output:\n$output")
@@ -163,5 +181,5 @@ class LlamaServerManager(private val context: Context) {
         }
     }
 
-    fun isRunning(): Boolean = process?.isAlive == true
+    fun isRunning(): Boolean = process?.isAliveCompat() == true
 }

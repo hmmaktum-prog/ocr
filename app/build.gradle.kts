@@ -5,12 +5,12 @@ plugins {
 
 android {
     namespace = "com.example.ocr"
-    compileSdk = 34
+    compileSdk = 35
 
     defaultConfig {
         applicationId = "com.example.ocr"
         minSdk = 24
-        targetSdk = 34
+        targetSdk = 35
         versionCode = 1
         versionName = "1.0"
     }
@@ -21,7 +21,6 @@ android {
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }
-    
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -33,21 +32,31 @@ android {
     buildFeatures {
         viewBinding = true
     }
+
+    lint {
+        // Icon warnings are non-functional — suppress to keep lint output clean
+        disable += setOf(
+            "IconDuplicatesConfig",
+            "IconLauncherShape",
+            "IconLocation",
+            "IconMissingDensityFolder",
+            "MonochromeLauncherIcon"
+        )
+    }
 }
 
 dependencies {
-    implementation("androidx.core:core-ktx:1.12.0")
+    implementation("androidx.core:core-ktx:1.15.0")
     implementation("androidx.core:core-splashscreen:1.0.1")
-    implementation("androidx.appcompat:appcompat:1.6.1")
-    implementation("com.google.android.material:material:1.11.0")
-    implementation("androidx.constraintlayout:constraintlayout:2.1.4")
-    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.7.0")
-    implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.7.0")
-    implementation("androidx.activity:activity-ktx:1.8.2")
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
-    
-    
+    implementation("androidx.appcompat:appcompat:1.7.0")
+    implementation("com.google.android.material:material:1.12.0")
+    implementation("androidx.constraintlayout:constraintlayout:2.2.1")
+    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
+    implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.8.7")
+    implementation("androidx.activity:activity-ktx:1.10.1")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
+
     // Networking for Llama API
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
-    implementation("org.json:json:20231013") // Or use Gson/Moshi
+    implementation("org.json:json:20240303")
 }

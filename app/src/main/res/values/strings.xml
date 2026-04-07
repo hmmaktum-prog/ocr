@@ -25,6 +25,10 @@
     <string name="btn_cancel">Cancel</string>
     <string name="btn_share">Share Output</string>
     <string name="btn_initialize_engine">Initialize Engine</string>
+    <string name="btn_download_model">Download &amp; Initialize Model</string>
+    <string name="label_select_model_type">Select Model Type</string>
+    <string name="label_radio_standard">Standard</string>
+    <string name="label_radio_standard_full">Standard (Full)</string>
 
     <!-- Error messages -->
     <string name="error_unsupported_file">Unsupported file type. Please select a PDF or image file (PNG, JPG).</string>
