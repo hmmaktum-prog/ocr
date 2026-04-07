@@ -1,0 +1,199 @@
+W/com.example.ocr( 6976): Unexpected CPU variant for x86: x86_64.
+
+W/com.example.ocr( 6976): Known variants: atom, sandybridge, silvermont, kabylake, default
+
+I/ndk_translation( 6976): Initialized NDK translation (aarch64), version 0.2.3
+
+D/CompatibilityChangeReporter( 6976): Compat change id reported: 171979766; UID 10172; state: ENABLED
+
+D/nativeloader( 6976): Configuring classloader-namespace for other apk /data/app/~~FTOKl-y-2-GiBHHb-JX5eA==/com.example.ocr-2ZXGPChimKKBhSE-edsvaw==/base.apk. target_sdk_version=35, uses_libraries=, library_path=/data/app/~~FTOKl-y-2-GiBHHb-JX5eA==/com.example.ocr-2ZXGPChimKKBhSE-edsvaw==/lib/arm64:/data/app/~~FTOKl-y-2-GiBHHb-JX5eA==/com.example.ocr-2ZXGPChimKKBhSE-edsvaw==/base.apk!/lib/arm64-v8a, permitted_path=/data:/mnt/expand:/data/user/0/com.example.ocr
+
+V/GraphicsEnvironment( 6976): ANGLE Developer option for 'com.example.ocr' set to: 'default'
+
+V/GraphicsEnvironment( 6976): ANGLE GameManagerService for com.example.ocr: false
+
+V/GraphicsEnvironment( 6976): Neither updatable production driver nor prerelease driver is supported.
+
+D/NetworkSecurityConfig( 6976): Using Network Security Config from resource network_security_config debugBuild: false
+
+D/NetworkSecurityConfig( 6976): Using Network Security Config from resource network_security_config debugBuild: false
+
+D/AppCompatDelegate( 6976): Checking for metadata for AppLocalesMetadataHolderService : Service not found
+
+D/CompatibilityChangeReporter( 6976): Compat change id reported: 210923482; UID 10172; state: ENABLED
+
+D/CompatibilityChangeReporter( 6976): Compat change id reported: 171228096; UID 10172; state: ENABLED
+
+D/libEGL  ( 6976): loaded /vendor/lib64/egl/libEGL_emulation.so
+
+D/libEGL  ( 6976): loaded /vendor/lib64/egl/libGLESv1_CM_emulation.so
+
+D/libEGL  ( 6976): loaded /vendor/lib64/egl/libGLESv2_emulation.so
+
+D/HostConnection( 6976): HostComposition ext ANDROID_EMU_CHECKSUM_HELPER_v1 ANDROID_EMU_native_sync_v2 ANDROID_EMU_native_sync_v3 ANDROID_EMU_native_sync_v4 ANDROID_EMU_dma_v1 ANDROID_EMU_direct_mem ANDROID_EMU_host_composition_v1 ANDROID_EMU_host_composition_v2 ANDROID_EMU_YUV_Cache ANDROID_EMU_has_shared_slots_host_memory_allocator ANDROID_EMU_sync_buffer_data ANDROID_EMU_read_color_buffer_dma ANDROID_EMU_hwc_multi_configs ANDROID_EMU_hwc_color_transform GL_OES_EGL_image_external_essl3 GL_OES_vertex_array_object GL_KHR_texture_compression_astc_ldr ANDROID_EMU_host_side_tracing ANDROID_EMU_gles_max_version_3_0 
+
+W/OpenGLRenderer( 6976): Failed to choose config with EGL_SWAP_BEHAVIOR_PRESERVED, retrying without...
+
+W/OpenGLRenderer( 6976): Failed to initialize 101010-2 format, error = EGL_SUCCESS
+
+D/EGL_emulation( 6976): eglCreateContext: 0x7cac432b4950: maj 3 min 0 rcv 3
+
+D/EGL_emulation( 6976): eglMakeCurrent: 0x7cac432b4950: ver 3 0 (tinfo 0x7cae5901b080) (first time)
+
+I/Gralloc4( 6976): mapper 4.x is not supported
+
+W/Gralloc4( 6976): allocator 4.x is not supported
+
+D/HostConnection( 6976): HostComposition ext ANDROID_EMU_CHECKSUM_HELPER_v1 ANDROID_EMU_native_sync_v2 ANDROID_EMU_native_sync_v3 ANDROID_EMU_native_sync_v4 ANDROID_EMU_dma_v1 ANDROID_EMU_direct_mem ANDROID_EMU_host_composition_v1 ANDROID_EMU_host_composition_v2 ANDROID_EMU_YUV_Cache ANDROID_EMU_has_shared_slots_host_memory_allocator ANDROID_EMU_sync_buffer_data ANDROID_EMU_read_color_buffer_dma ANDROID_EMU_hwc_multi_configs ANDROID_EMU_hwc_color_transform GL_OES_EGL_image_external_essl3 GL_OES_vertex_array_object GL_KHR_texture_compression_astc_ldr ANDROID_EMU_host_side_tracing ANDROID_EMU_gles_max_version_3_0 
+
+W/Parcel  ( 6976): Expecting binder but got null!
+
+W/Parcel  ( 6976): Expecting binder but got null!
+
+D/EGL_emulation( 6976): app_time_stats: avg=118.04ms min=0.80ms max=1097.76ms count=11
+
+D/EGL_emulation( 6976): app_time_stats: avg=214.82ms min=10.56ms max=1182.19ms count=6
+
+D/EGL_emulation( 6976): app_time_stats: avg=173.39ms min=10.75ms max=2677.60ms count=17
+
+D/OpenGLRenderer( 6976): endAllActiveAnimators on 0x7cacc32d6490 (RippleDrawable) with handle 0x7cabd32dc3f0
+
+D/EGL_emulation( 6976): app_time_stats: avg=180.79ms min=5.58ms max=2747.28ms count=16
+
+D/ProfileInstaller( 6976): Installing profile for com.example.ocr
+
+D/EGL_emulation( 6976): app_time_stats: avg=331.14ms min=1.15ms max=2237.25ms count=7
+
+W/Parcel  ( 6976): Expecting binder but got null!
+
+D/EGL_emulation( 6976): app_time_stats: avg=125.03ms min=0.85ms max=1416.03ms count=12
+
+D/OpenGLRenderer( 6976): endAllActiveAnimators on 0x7cacc32eed40 (RippleDrawable) with handle 0x7cabd330a020
+
+D/TrafficStats( 6976): tagSocket(120) with statsTag=0xffffffff, statsUid=-1
+
+D/EGL_emulation( 6976): app_time_stats: avg=41.25ms min=7.04ms max=1210.53ms count=50
+
+D/TrafficStats( 6976): tagSocket(74) with statsTag=0xffffffff, statsUid=-1
+
+D/EGL_emulation( 6976): app_time_stats: avg=24.45ms min=5.05ms max=198.73ms count=41
+
+D/EGL_emulation( 6976): app_time_stats: avg=143.03ms min=15.68ms max=203.44ms count=7
+
+D/EGL_emulation( 6976): app_time_stats: avg=133.39ms min=12.96ms max=201.13ms count=9
+
+D/EGL_emulation( 6976): app_time_stats: avg=126.77ms min=15.95ms max=200.21ms count=8
+
+D/EGL_emulation( 6976): app_time_stats: avg=126.55ms min=15.99ms max=200.41ms count=8
+
+D/EGL_emulation( 6976): app_time_stats: avg=145.74ms min=22.68ms max=200.04ms count=8
+
+D/EGL_emulation( 6976): app_time_stats: avg=125.12ms min=8.29ms max=200.29ms count=8
+
+D/EGL_emulation( 6976): app_time_stats: avg=149.02ms min=11.33ms max=200.35ms count=8
+
+D/EGL_emulation( 6976): app_time_stats: avg=112.89ms min=16.21ms max=200.19ms count=9
+
+D/EGL_emulation( 6976): app_time_stats: avg=124.96ms min=16.00ms max=201.72ms count=8
+
+D/EGL_emulation( 6976): app_time_stats: avg=131.53ms min=16.38ms max=200.17ms count=9
+
+D/EGL_emulation( 6976): app_time_stats: avg=142.91ms min=15.37ms max=216.14ms count=7
+
+D/EGL_emulation( 6976): app_time_stats: avg=124.42ms min=16.73ms max=202.01ms count=8
+
+D/EGL_emulation( 6976): app_time_stats: avg=133.54ms min=18.46ms max=212.24ms count=9
+
+D/EGL_emulation( 6976): app_time_stats: avg=108.70ms min=5.04ms max=197.87ms count=9
+
+D/EGL_emulation( 6976): app_time_stats: avg=131.31ms min=17.60ms max=200.47ms count=9
+
+D/EGL_emulation( 6976): app_time_stats: avg=127.18ms min=17.42ms max=200.25ms count=8
+
+I/ModelDownloader( 6976): Downloaded: PaddleOCR-VL-1.5.gguf (935768992 bytes)
+
+D/EGL_emulation( 6976): app_time_stats: avg=143.35ms min=16.62ms max=292.29ms count=9
+
+D/EGL_emulation( 6976): app_time_stats: avg=129.02ms min=17.34ms max=215.86ms count=8
+
+D/EGL_emulation( 6976): app_time_stats: avg=169.46ms min=17.61ms max=216.91ms count=6
+
+D/EGL_emulation( 6976): app_time_stats: avg=125.04ms min=17.69ms max=199.87ms count=8
+
+D/EGL_emulation( 6976): app_time_stats: avg=131.89ms min=22.40ms max=200.08ms count=9
+
+D/EGL_emulation( 6976): app_time_stats: avg=111.46ms min=7.53ms max=200.36ms count=9
+
+D/EGL_emulation( 6976): app_time_stats: avg=123.97ms min=10.34ms max=196.95ms count=8
+
+D/EGL_emulation( 6976): app_time_stats: avg=125.12ms min=16.91ms max=201.06ms count=8
+
+D/EGL_emulation( 6976): app_time_stats: avg=131.24ms min=16.56ms max=201.15ms count=9
+
+D/EGL_emulation( 6976): app_time_stats: avg=125.81ms min=16.52ms max=207.31ms count=8
+
+D/EGL_emulation( 6976): app_time_stats: avg=112.88ms min=10.31ms max=200.95ms count=9
+
+D/EGL_emulation( 6976): app_time_stats: avg=129.30ms min=22.42ms max=199.83ms count=9
+
+D/EGL_emulation( 6976): app_time_stats: avg=126.33ms min=8.82ms max=199.93ms count=8
+
+D/EGL_emulation( 6976): app_time_stats: avg=111.70ms min=12.90ms max=197.13ms count=9
+
+D/EGL_emulation( 6976): app_time_stats: avg=131.33ms min=17.12ms max=200.26ms count=9
+
+D/EGL_emulation( 6976): app_time_stats: avg=101.70ms min=17.21ms max=199.77ms count=10
+
+I/ModelDownloader( 6976): Downloaded: PaddleOCR-VL-1.5-mmproj.gguf (881770496 bytes)
+
+I/LlamaServerManager( 6976): Device supported ABIs: x86_64, arm64-v8a
+
+I/LlamaServerManager( 6976): Looking for llama-server at: /data/app/~~FTOKl-y-2-GiBHHb-JX5eA==/com.example.ocr-2ZXGPChimKKBhSE-edsvaw==/lib/arm64/libllama_server.so
+
+I/LlamaServerManager( 6976): Found: libllama_server.so (95MB)
+
+I/LlamaServerManager( 6976): llama-server ELF verified (95MB)
+
+I/LlamaServerManager( 6976): Starting llama-server on arm64 (device ABI: x86_64, ctx: 2048)
+
+D/EGL_emulation( 6976): app_time_stats: avg=62.16ms min=4.22ms max=200.12ms count=16
+
+D/LlamaServerManager( 6976): llama-server: CANNOT LINK EXECUTABLE "/data/app/~~FTOKl-y-2-GiBHHb-JX5eA==/com.example.ocr-2ZXGPChimKKBhSE-edsvaw==/lib/arm64/libllama_server.so": library "libmtmd.so" not found: needed by main executable
+
+E/LlamaServerManager( 6976): llama-server exited with code 1. Output:
+
+E/LlamaServerManager( 6976): CANNOT LINK EXECUTABLE "/data/app/~~FTOKl-y-2-GiBHHb-JX5eA==/com.example.ocr-2ZXGPChimKKBhSE-edsvaw==/lib/arm64/libllama_server.so": library "libmtmd.so" not found: needed by main executable
+
+W/Parcel  ( 6976): Expecting binder but got null!
+
+D/EGL_emulation( 6976): app_time_stats: avg=6.62ms min=0.79ms max=93.95ms count=53
+
+D/EGL_emulation( 6976): app_time_stats: avg=123.81ms min=0.92ms max=1347.88ms count=12
+
+D/EGL_emulation( 6976): app_time_stats: avg=366.86ms min=0.82ms max=6011.48ms count=17
+
+I/LlamaServerManager( 6976): Device supported ABIs: x86_64, arm64-v8a
+
+I/LlamaServerManager( 6976): Looking for llama-server at: /data/app/~~FTOKl-y-2-GiBHHb-JX5eA==/com.example.ocr-2ZXGPChimKKBhSE-edsvaw==/lib/arm64/libllama_server.so
+
+I/LlamaServerManager( 6976): Found: libllama_server.so (95MB)
+
+I/LlamaServerManager( 6976): llama-server ELF verified (95MB)
+
+I/LlamaServerManager( 6976): Starting llama-server on arm64 (device ABI: x86_64, ctx: 2048)
+
+D/OpenGLRenderer( 6976): endAllActiveAnimators on 0x7cacc32fa180 (RippleDrawable) with handle 0x7cabd3308550
+
+D/EGL_emulation( 6976): app_time_stats: avg=1994.84ms min=6.06ms max=7907.65ms count=4
+
+D/LlamaServerManager( 6976): llama-server: CANNOT LINK EXECUTABLE "/data/app/~~FTOKl-y-2-GiBHHb-JX5eA==/com.example.ocr-2ZXGPChimKKBhSE-edsvaw==/lib/arm64/libllama_server.so": library "libmtmd.so" not found: needed by main executable
+
+E/LlamaServerManager( 6976): llama-server exited with code 1. Output:
+
+E/LlamaServerManager( 6976): CANNOT LINK EXECUTABLE "/data/app/~~FTOKl-y-2-GiBHHb-JX5eA==/com.example.ocr-2ZXGPChimKKBhSE-edsvaw==/lib/arm64/libllama_server.so": library "libmtmd.so" not found: needed by main executable
+
+D/EGL_emulation( 6976): app_time_stats: avg=1.85ms min=0.82ms max=15.64ms count=61
+
+W/Parcel  ( 6976): Expecting binder but got null!
+
+D/EGL_emulation( 6976): app_time_stats: avg=137.05ms min=0.90ms max=1399.47ms count=11
