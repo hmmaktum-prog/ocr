@@ -17,7 +17,8 @@
             android:layout_height="?attr/actionBarSize"
             app:title="@string/app_name"
             app:titleCentered="true"
-            app:titleTextColor="?attr/colorOnSurface"/>
+            app:titleTextColor="?attr/colorOnSurface"
+            app:menu="@menu/menu_main"/>
     </com.google.android.material.appbar.AppBarLayout>
 
     <!-- Landscape: 2-column layout — status left, buttons right -->
@@ -164,6 +165,17 @@
                     android:layout_marginStart="4dp"
                     android:layout_marginEnd="4dp"
                     android:text="@string/btn_share"
+                    android:visibility="gone" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnSaveToDevice"
+                    style="@style/Widget.Material3.Button.TonalButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    app:icon="@drawable/ic_save"
+                    android:layout_marginStart="4dp"
+                    android:layout_marginEnd="4dp"
+                    android:text="@string/btn_save_to_device"
                     android:visibility="gone" />
 
                 <com.google.android.material.button.MaterialButton

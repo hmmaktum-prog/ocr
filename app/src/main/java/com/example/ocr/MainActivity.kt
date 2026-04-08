@@ -1,6 +1,7 @@
 package com.example.ocr
 
 import android.Manifest
+import android.animation.ObjectAnimator
 import android.app.ActivityManager
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -14,11 +15,13 @@ import android.os.Bundle
 import android.provider.OpenableColumns
 import android.util.Log
 import android.view.View
+import android.view.animation.LinearInterpolator
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
@@ -54,12 +57,45 @@ class MainActivity : AppCompatActivity() {
 
     private var processingJob: Job? = null
     private var engineLoadingJob: Job? = null
-    // Fix LOGIC-03: Track download job to support back-press cancellation
     private var downloadJob: Job? = null
     private var lastOutputFile: File? = null
-    // Fix USE-07: Store last extracted text for preview
     private var lastExtractedText: String = ""
     private var isEngineReady: Boolean = false
+
+    private var lastThumbnail: Bitmap? = null
+    private var iconAnimator: ObjectAnimator? = null
+
+    private val saveDocumentLauncher = registerForActivityResult(
+        ActivityResultContracts.CreateDocument(
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        )
+    ) { uri ->
+        uri ?: return@registerForActivityResult
+        val src = lastOutputFile ?: return@registerForActivityResult
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                contentResolver.openOutputStream(uri)?.use { out ->
+                    src.inputStream().use { it.copyTo(out) }
+                }
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(
+                        this@MainActivity,
+                        getString(R.string.status_saved_to_device),
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Save to device failed", e)
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(
+                        this@MainActivity,
+                        getString(R.string.error_save_failed),
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
+            }
+        }
+    }
 
     private val selectFileLauncher = registerForActivityResult(
         ActivityResultContracts.OpenDocument()
@@ -79,6 +115,25 @@ class MainActivity : AppCompatActivity() {
 
         downloader = ModelDownloader(this)
         llamaServerManager = LlamaServerManager(this)
+
+        // Restore dark/light mode preference
+        val prefs = getSharedPreferences("app_prefs", MODE_PRIVATE)
+        val isDark = prefs.getBoolean("dark_mode", false)
+        AppCompatDelegate.setDefaultNightMode(
+            if (isDark) AppCompatDelegate.MODE_NIGHT_YES else AppCompatDelegate.MODE_NIGHT_NO
+        )
+
+        // Toolbar Day/Night toggle
+        binding.toolbar.setOnMenuItemClickListener { item ->
+            if (item.itemId == R.id.action_toggle_theme) {
+                val currentlyDark = AppCompatDelegate.getDefaultNightMode() == AppCompatDelegate.MODE_NIGHT_YES
+                val newMode = if (currentlyDark) AppCompatDelegate.MODE_NIGHT_NO else AppCompatDelegate.MODE_NIGHT_YES
+                AppCompatDelegate.setDefaultNightMode(newMode)
+                getSharedPreferences("app_prefs", MODE_PRIVATE)
+                    .edit().putBoolean("dark_mode", !currentlyDark).apply()
+                true
+            } else false
+        }
 
         // Request POST_NOTIFICATIONS on Android 13+ for background processing notification
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -174,8 +229,11 @@ class MainActivity : AppCompatActivity() {
         binding.btnSelectFile.setOnClickListener { selectFileLauncher.launch(SUPPORTED_MIME_TYPES) }
         binding.btnCancel.setOnClickListener { showCancelDialog() }
         binding.btnShare.setOnClickListener { lastOutputFile?.let { shareFile(it) } }
-        // Fix USE-07: In-app text preview button
         binding.btnPreview.setOnClickListener { showTextPreview() }
+        binding.btnSaveToDevice.setOnClickListener {
+            val f = lastOutputFile ?: return@setOnClickListener
+            saveDocumentLauncher.launch(f.name)
+        }
     }
 
     private fun setupBackPressHandler() {
@@ -448,7 +506,44 @@ class MainActivity : AppCompatActivity() {
             visibility = View.VISIBLE
         }
 
-        processFile(uri, fileName, isPdf)
+        // Load thumbnail of the selected file in background, then start processing
+        lifecycleScope.launch {
+            val thumb = withContext(Dispatchers.IO) { loadThumbnail(uri, isPdf) }
+            lastThumbnail = thumb
+            if (thumb != null) {
+                binding.statusIcon.clearColorFilter()
+                binding.statusIcon.imageTintList = null
+                binding.statusIcon.scaleType = android.widget.ImageView.ScaleType.CENTER_CROP
+                binding.statusIcon.setImageBitmap(thumb)
+            }
+            processFile(uri, fileName, isPdf)
+        }
+    }
+
+    /** Decode a small thumbnail from image or first page of PDF */
+    private fun loadThumbnail(uri: Uri, isPdf: Boolean): Bitmap? = try {
+        if (isPdf) {
+            contentResolver.openFileDescriptor(uri, "r")?.use { fd ->
+                PdfRenderer(fd).use { renderer ->
+                    renderer.openPage(0).use { page ->
+                        val scale = 200f / maxOf(page.width, page.height)
+                        val bmp = Bitmap.createBitmap(
+                            (page.width * scale).toInt().coerceAtLeast(1),
+                            (page.height * scale).toInt().coerceAtLeast(1),
+                            Bitmap.Config.ARGB_8888
+                        )
+                        page.render(bmp, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+                        bmp
+                    }
+                }
+            }
+        } else {
+            val opts = BitmapFactory.Options().apply { inSampleSize = 4 }
+            contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, opts) }
+        }
+    } catch (e: Exception) {
+        Log.w(TAG, "Thumbnail load failed", e)
+        null
     }
 
     private fun processFile(uri: Uri, fileName: String, isPdf: Boolean) {
@@ -496,6 +591,8 @@ class MainActivity : AppCompatActivity() {
                         lastOutputFile = outFile
                         lastExtractedText = extractedTexts.joinToString("\n\n")
                         binding.btnPreview.visibility = View.VISIBLE
+                        binding.btnShare.visibility = View.VISIBLE
+                        binding.btnSaveToDevice.visibility = View.VISIBLE
 
                         val statusMsg = getString(R.string.status_saved_success, outFile.absolutePath)
                         binding.statusText.text = if (failedPages.isNotEmpty()) {
@@ -505,7 +602,6 @@ class MainActivity : AppCompatActivity() {
                                 failedPages.joinToString(", ")
                             )
                         } else statusMsg
-                        binding.btnShare.visibility = View.VISIBLE
                     } else {
                         binding.statusText.text = getString(R.string.status_saved_failed)
                     }
@@ -696,8 +792,7 @@ class MainActivity : AppCompatActivity() {
     // Fix UI-02: Reset fileInfoText visibility on processing start
     private fun setProcessingState(processing: Boolean) {
         binding.progressBar.visibility = if (processing) View.VISIBLE else View.GONE
-        
-        // Fix USE-08: Explicit texts for disabled states
+
         binding.btnSelectFile.isEnabled = !processing && isEngineReady
         if (processing) {
             binding.btnSelectFile.text = getString(R.string.status_initializing)
@@ -706,12 +801,50 @@ class MainActivity : AppCompatActivity() {
         } else {
             binding.btnSelectFile.text = getString(R.string.btn_select_file)
         }
-        
+
         binding.btnCancel.visibility = if (processing) View.VISIBLE else View.GONE
         if (processing) {
             binding.btnShare.visibility = View.GONE
             binding.btnPreview.visibility = View.GONE
+            binding.btnSaveToDevice.visibility = View.GONE
             binding.fileInfoText.visibility = View.GONE
+
+            // Animate statusIcon — rotate while processing
+            binding.statusIcon.setImageResource(R.drawable.ic_document)
+            binding.statusIcon.imageTintList =
+                android.content.res.ColorStateList.valueOf(
+                    com.google.android.material.color.MaterialColors.getColor(
+                        binding.statusIcon, com.google.android.material.R.attr.colorPrimary
+                    )
+                )
+            binding.statusIcon.scaleType = android.widget.ImageView.ScaleType.FIT_CENTER
+            iconAnimator?.cancel()
+            iconAnimator = ObjectAnimator.ofFloat(binding.statusIcon, "rotation", 0f, 360f).apply {
+                duration = 1800
+                repeatCount = ObjectAnimator.INFINITE
+                interpolator = LinearInterpolator()
+                start()
+            }
+        } else {
+            // Stop animation and restore thumbnail or document icon
+            iconAnimator?.cancel()
+            iconAnimator = null
+            binding.statusIcon.rotation = 0f
+            val thumb = lastThumbnail
+            if (thumb != null) {
+                binding.statusIcon.imageTintList = null
+                binding.statusIcon.scaleType = android.widget.ImageView.ScaleType.CENTER_CROP
+                binding.statusIcon.setImageBitmap(thumb)
+            } else {
+                binding.statusIcon.setImageResource(R.drawable.ic_document)
+                binding.statusIcon.imageTintList =
+                    android.content.res.ColorStateList.valueOf(
+                        com.google.android.material.color.MaterialColors.getColor(
+                            binding.statusIcon, com.google.android.material.R.attr.colorPrimary
+                        )
+                    )
+                binding.statusIcon.scaleType = android.widget.ImageView.ScaleType.FIT_CENTER
+            }
         }
     }
 

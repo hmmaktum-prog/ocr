@@ -41,6 +41,10 @@
     <string name="btn_initialize_engine">Initialize Engine</string>
     <string name="btn_download_model">Download &amp; Initialize Model</string>
     <string name="btn_preview">Preview Text</string>
+    <string name="btn_save_to_device">Save to Device</string>
+    <string name="menu_toggle_theme">Toggle Day/Night</string>
+    <string name="status_saved_to_device">File saved successfully to your chosen location.</string>
+    <string name="error_save_failed">Failed to save file. Please try again.</string>
 
     <!-- App Onboarding -->
     <string name="onboarding_title">Welcome to PaddleOCR-VL</string>
