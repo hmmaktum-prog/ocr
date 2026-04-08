@@ -72,8 +72,8 @@ class OcrEngine {
                             }
                             throw IOException("Server returned HTTP ${response.code}: ${response.message}")
                         }
-                        // Fix SEC-07: cap response body at 1MB to avoid unbounded RAM usage
-                        responseBody = response.body?.source()?.readUtf8(1_000_000) ?: ""
+                        // Cap response body at 5MB — large OCR pages can produce long text
+                        responseBody = response.body?.source()?.readUtf8(5_000_000) ?: ""
                     }
                     if (responseBody.isNotEmpty()) break
                 } catch (e: Exception) {

@@ -11,7 +11,7 @@ android {
         applicationId = "com.example.ocr"
         minSdk = 28
         targetSdk = 35
-        versionCode = 1
+        versionCode = (System.getenv("BUILD_NUMBER")?.toIntOrNull() ?: 1)
         versionName = "1.0"
         ndk {
             abiFilters += listOf("arm64-v8a")
