@@ -61,7 +61,7 @@ class ChatAdapter(
     }
 
     override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
-        onBindViewHolder(holder, position, emptyList())
+        onBindViewHolder(holder, position, mutableListOf())
     }
 
     override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int, payloads: MutableList<Any>) {
