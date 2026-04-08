@@ -124,4 +124,55 @@
     <!-- OCR Timing -->
     <string name="status_saved_success_timed">সংরক্ষিত: %1$s\nসময় লেগেছে: %2$d সেকেন্ড</string>
     <string name="status_processing_time_pages">প্রসেস হচ্ছে… পৃষ্ঠা %1$d/%2$d (%3$d সেকেন্ড)</string>
+
+    <!-- Status messages (missing translations) -->
+    <string name="status_checking_engine">ইঞ্জিনের অবস্থা যাচাই করা হচ্ছে…</string>
+    <string name="status_downloading_model_detail">ডাউনলোড হচ্ছে (<xliff:g xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2" id="file_num">%1$d</xliff:g>/<xliff:g xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2" id="total">%2$d</xliff:g>): <xliff:g xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2" id="name">%3$s</xliff:g>… <xliff:g xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2" id="pct">%4$d</xliff:g>%%</string>
+    <string name="status_engine_reloading">ইঞ্জিন বন্ধ হয়ে গেছে। পুনরায় লোড করা হচ্ছে…</string>
+    <string name="status_engine_loading_stage"><xliff:g xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2" id="stage">%1$s</xliff:g>\n<xliff:g xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2" id="elapsed">%2$d</xliff:g> সেকেন্ড অতিবাহিত (সর্বোচ্চ ৫ মিনিট)</string>
+    <string name="status_saved_to_device">ফাইল সফলভাবে আপনার নির্বাচিত স্থানে সংরক্ষিত হয়েছে।</string>
+    <string name="status_tok_per_sec">গড় %.1f tok/s</string>
+
+    <!-- Benchmark -->
+    <string name="status_benchmark_running">বেঞ্চমার্ক চলছে… অনুগ্রহ করে অপেক্ষা করুন</string>
+    <string name="status_benchmark_result">বেঞ্চমার্ক: %.1f tok/s</string>
+    <string name="status_benchmark_failed">বেঞ্চমার্ক ব্যর্থ হয়েছে — ইঞ্জিনের অবস্থা পরীক্ষা করুন</string>
+    <string name="status_benchmark_no_timing">বেঞ্চমার্ক সম্পন্ন (সার্ভার থেকে সময়ের তথ্য পাওয়া যায়নি)</string>
+    <string name="benchmark_engine_not_ready">অনুগ্রহ করে প্রথমে ইঞ্জিন চালু করুন</string>
+
+    <!-- Battery Saver -->
+    <string name="battery_saver_on">ব্যাটারি সেভার চালু — পরবর্তী পুনরায় চালুর পর ইঞ্জিন শুধু CPU ব্যবহার করবে</string>
+    <string name="battery_saver_off">ব্যাটারি সেভার বন্ধ — পরবর্তী পুনরায় চালুর পর GPU ত্বরণ পুনরুদ্ধার হবে</string>
+    <string name="battery_saver_needs_restart">এই সেটিং কার্যকর করতে ইঞ্জিন পুনরায় চালু করুন</string>
+
+    <!-- Warnings -->
+    <string name="warning_cpu_hot">CPU অতিরিক্ত গরম হচ্ছে (%1$.1f°C) — প্রসেসিং ধীর হতে পারে</string>
+
+    <!-- RAM usage -->
+    <string name="ram_usage_text">RAM: %1$d%% ব্যবহৃত  (%2$d MB ফাঁকা)</string>
+
+    <!-- Buttons (missing) -->
+    <string name="btn_save_to_device">ডিভাইসে সংরক্ষণ করুন</string>
+
+    <!-- Error messages (missing) -->
+    <string name="error_save_failed">ফাইল সংরক্ষণ ব্যর্থ হয়েছে। আবার চেষ্টা করুন।</string>
+
+    <!-- Menu (missing) -->
+    <string name="menu_battery_saver">ব্যাটারি সেভার</string>
+    <string name="menu_benchmark">বেঞ্চমার্ক</string>
+    <string name="menu_toggle_theme">দিন/রাত মোড পরিবর্তন</string>
+
+    <!-- Notification (missing) -->
+    <string name="notif_channel_name">OCR প্রসেসিং</string>
+    <string name="notif_channel_desc">ব্যাকগ্রাউন্ডে OCR চলার সময় দেখায়</string>
+    <string name="notif_processing_title">OCR চলছে…</string>
+    <string name="notif_processing_text">অ্যাপে ফিরে যেতে ট্যাপ করুন</string>
+
+    <!-- Device Info (missing) -->
+    <string name="device_info_battery_saver_on">⚡ ব্যাটারি সেভার: চালু (শুধু CPU, ২০৪৮ কনটেক্সট)</string>
+    <string name="device_info_battery_saver_off">ব্যাটারি সেভার: বন্ধ</string>
+    <string name="device_info_cpu_temp">CPU তাপমাত্রা: %1$.1f°C</string>
+    <string name="device_info_cpu_temp_hot">CPU তাপমাত্রা: %1$.1f°C  ⚠ অতিরিক্ত গরম</string>
+    <string name="device_info_cpu_temp_unknown">CPU তাপমাত্রা: অজানা</string>
+    <string name="device_info_section_thermal">── তাপীয় তথ্য ──</string>
 </resources>
