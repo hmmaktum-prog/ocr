@@ -6,6 +6,7 @@
     <string name="status_initializing">Initializing…</string>
     <string name="status_checking_models">Checking models…</string>
     <string name="status_downloading_model">Downloading Model… <xliff:g xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2" id="progress">%1$d</xliff:g>%%</string>
+    <string name="status_downloading_model_detail">Downloading (<xliff:g xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2" id="file_num">%1$d</xliff:g>/<xliff:g xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2" id="total">%2$d</xliff:g>): <xliff:g xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2" id="name">%3$s</xliff:g>… <xliff:g xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2" id="pct">%4$d</xliff:g>%%</string>
     <string name="status_models_ready">Models ready. Starting engine…</string>
     <string name="status_models_found">Models found. Tap the button to start.</string>
     <string name="status_models_failed">Failed to download models. Check internet connection.</string>
@@ -13,6 +14,7 @@
     <string name="status_engine_ready">Engine Ready. Please select a file.</string>
     <string name="status_engine_failed">Engine Initialization Failed.</string>
     <string name="status_engine_loading">Loading model… <xliff:g xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2" id="elapsed">%1$d</xliff:g>s elapsed (may take up to 5 min)</string>
+    <string name="status_engine_loading_stage"><xliff:g xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2" id="stage">%1$s</xliff:g>\n<xliff:g xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2" id="elapsed">%2$d</xliff:g>s elapsed (up to 5 min)</string>
     <string name="status_processing_pdf">Processing PDF page <xliff:g xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2" id="current">%1$d</xliff:g>/<xliff:g xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2" id="total">%2$d</xliff:g>…</string>
     <string name="status_processing_image">Processing Image…</string>
     <string name="status_generating_docx">Generating .docx…</string>

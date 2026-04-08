@@ -34,8 +34,12 @@ class ModelDownloader(private val context: Context) {
         "$BASE_REPO/$MMPROJ_FILE"
     )
 
+    /**
+     * onProgress: (overallPercent, currentFileName, fileIndex, totalFiles)
+     * — UI can show "Downloading (1/2): PaddleOCR-VL-1.5.gguf ... 45%"
+     */
     suspend fun checkAndDownloadModels(
-        onProgress: (Int) -> Unit,
+        onProgress: (overallPercent: Int, fileName: String, fileIndex: Int, totalFiles: Int) -> Unit,
         onComplete: (Boolean) -> Unit
     ) {
         withContext(Dispatchers.IO) {
@@ -54,7 +58,6 @@ class ModelDownloader(private val context: Context) {
                 val totalFiles = urls.size
 
                 // Pre-check storage requirements and collect expected sizes per URL
-                // Fix LOGIC-11: Store expected sizes to detect partial existing files
                 val expectedSizes = mutableMapOf<String, Long>()
                 var totalRequiredSpace: Long = 0
                 for (urlStr in urls) {
@@ -74,13 +77,14 @@ class ModelDownloader(private val context: Context) {
 
                 if (totalRequiredSpace > 0) {
                     val storageStat = StatFs(modelDir.absolutePath)
-                    val safetyMargin = 50 * 1024 * 1024L // 50MB extra
+                    val safetyMargin = 50 * 1024 * 1024L
                     if (storageStat.availableBytes < totalRequiredSpace + safetyMargin) {
                         val requiredMb = totalRequiredSpace / (1024 * 1024)
                         throw Exception(context.getString(R.string.error_insufficient_storage) + " (Needs ~${requiredMb}MB)")
                     }
                 }
 
+                // Sequential download — one file at a time
                 for (i in urls.indices) {
                     coroutineContext.ensureActive()
 
@@ -89,7 +93,6 @@ class ModelDownloader(private val context: Context) {
                     val file = File(modelDir, fileName)
                     val expectedSize = expectedSizes[urlStr] ?: 0L
 
-                    // Fix LOGIC-11: Consider file invalid if size doesn't match expected
                     val needsDownload = !file.exists() ||
                         file.length() == 0L ||
                         (expectedSize > 0L && file.length() != expectedSize)
@@ -97,14 +100,14 @@ class ModelDownloader(private val context: Context) {
                     if (needsDownload) {
                         val fileStat = StatFs(modelDir.absolutePath)
                         if (fileStat.availableBytes < 50 * 1024 * 1024) {
-                            // Fix LOGIC-13: Use localized string instead of hardcoded English
                             throw Exception(context.getString(R.string.error_insufficient_storage))
                         }
-                        downloadFileWithRetry(urlStr, file, i, totalFiles, onProgress)
+                        Log.i(TAG, "Starting download ${i + 1}/$totalFiles: $fileName")
+                        downloadFileWithRetry(urlStr, file, i, totalFiles, fileName, onProgress)
                     } else {
                         val progress = ((i + 1) * 100) / totalFiles
-                        onProgress(progress)
-                        Log.i(TAG, "Model file already exists: $fileName (${file.length()} bytes)")
+                        onProgress(progress, fileName, i, totalFiles)
+                        Log.i(TAG, "File ${i + 1}/$totalFiles already exists: $fileName (${file.length()} bytes)")
                     }
                 }
                 onComplete(true)
@@ -123,13 +126,14 @@ class ModelDownloader(private val context: Context) {
         targetFile: File,
         fileIndex: Int,
         totalFiles: Int,
-        onProgress: (Int) -> Unit
+        displayName: String,
+        onProgress: (overallPercent: Int, fileName: String, fileIndex: Int, totalFiles: Int) -> Unit
     ) {
         var lastException: Exception? = null
         for (attempt in 1..MAX_RETRIES) {
             coroutineContext.ensureActive()
             try {
-                downloadFile(urlStr, targetFile, fileIndex, totalFiles, onProgress)
+                downloadFile(urlStr, targetFile, fileIndex, totalFiles, displayName, onProgress)
                 if (targetFile.exists() && targetFile.length() > 0) {
                     return // Success
                 } else {
@@ -153,7 +157,8 @@ class ModelDownloader(private val context: Context) {
         targetFile: File,
         fileIndex: Int,
         totalFiles: Int,
-        onProgress: (Int) -> Unit
+        displayName: String,
+        onProgress: (overallPercent: Int, fileName: String, fileIndex: Int, totalFiles: Int) -> Unit
     ) {
         val tempFile = File(targetFile.parent, "${targetFile.name}.tmp")
 
@@ -208,14 +213,13 @@ class ModelDownloader(private val context: Context) {
                             val now = System.currentTimeMillis()
                             if (now - lastProgressTime >= PROGRESS_UPDATE_INTERVAL_MS) {
                                 lastProgressTime = now
-                                if (fileLength > 0) {
+                                val overallProgress = if (fileLength > 0) {
                                     val fileRelativeProgress = ((total * 100) / fileLength).toInt()
-                                    val overallProgress = fileProgressBase + (fileRelativeProgress * fileProgressMultiplier / 100)
-                                    onProgress(overallProgress.coerceAtMost(100))
+                                    fileProgressBase + (fileRelativeProgress * fileProgressMultiplier / 100)
                                 } else {
-                                    val estimatedProgress = fileProgressBase + (fileProgressMultiplier / 2)
-                                    onProgress(estimatedProgress.coerceAtMost(100))
+                                    fileProgressBase + (fileProgressMultiplier / 2)
                                 }
+                                onProgress(overallProgress.coerceAtMost(100), displayName, fileIndex, totalFiles)
                             }
                         }
                         output.flush()

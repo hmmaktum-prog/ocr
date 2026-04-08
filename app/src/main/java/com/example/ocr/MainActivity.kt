@@ -205,11 +205,14 @@ class MainActivity : AppCompatActivity() {
         // Fix LOGIC-03: Store job reference for back-press cancellation
         downloadJob = lifecycleScope.launch {
             downloader.checkAndDownloadModels(
-                onProgress = { progress ->
+                onProgress = { overallPercent, fileName, fileIndex, totalFiles ->
                     runOnUiThread {
                         setProgressIndeterminate(false)
-                        binding.progressBar.progress = progress
-                        binding.statusText.text = getString(R.string.status_downloading_model, progress)
+                        binding.progressBar.progress = overallPercent
+                        binding.statusText.text = getString(
+                            R.string.status_downloading_model_detail,
+                            fileIndex + 1, totalFiles, fileName, overallPercent
+                        )
                     }
                 },
                 onComplete = { success ->
@@ -275,12 +278,15 @@ class MainActivity : AppCompatActivity() {
 
         llamaServerManager.setLoadingProgressListener(
             object : LlamaServerManager.LoadingProgressListener {
-                override fun onLoadingProgress(elapsedSeconds: Int, maxSeconds: Int) {
+                override fun onLoadingProgress(elapsedSeconds: Int, maxSeconds: Int, stageMessage: String) {
                     runOnUiThread {
                         binding.progressBar.isIndeterminate = false
                         binding.progressBar.max = maxSeconds
                         binding.progressBar.progress = elapsedSeconds
-                        binding.statusText.text = getString(R.string.status_engine_loading, elapsedSeconds)
+                        binding.statusText.text = getString(
+                            R.string.status_engine_loading_stage,
+                            stageMessage, elapsedSeconds
+                        )
                     }
                 }
             }

@@ -48,10 +48,36 @@ class LlamaServerManager(private val context: Context) {
     }
 
     /**
-     * Callback interface for server loading progress
+     * Callback interface for server loading progress.
+     * stageMessage: human-readable phase — "Loading main model (1/2)…" etc.
      */
     interface LoadingProgressListener {
-        fun onLoadingProgress(elapsedSeconds: Int, maxSeconds: Int)
+        fun onLoadingProgress(elapsedSeconds: Int, maxSeconds: Int, stageMessage: String)
+    }
+
+    /** Detect current loading phase by scanning llama-server stdout */
+    private fun detectStage(output: String): String = when {
+        // HTTP server is up — almost done
+        output.contains("HTTP server listening") ||
+        output.contains("srv  listen") ||
+        output.contains("listening on") ->
+            "Server starting… almost ready"
+
+        // Projector / mmproj / vision encoder loading
+        output.contains("clip_model_load") ||
+        output.contains("mmproj") ||
+        output.contains("vision model") ->
+            "Loading vision model (2/2)…"
+
+        // Main LLM tensor loading
+        output.contains("llm_load_tensors") ||
+        output.contains("llama_model_load") ||
+        output.contains("load_model") ||
+        output.contains(".gguf") ->
+            "Loading main model (1/2)…"
+
+        // Very early — process just started
+        else -> "Initializing engine…"
     }
 
     // Fix UI-04: @Volatile ensures write on Main thread is visible from IO thread
@@ -194,12 +220,15 @@ class LlamaServerManager(private val context: Context) {
                 delay(checkIntervalMs)
                 elapsed += checkIntervalMs
 
-                // Report progress to UI every second
+                // Report progress to UI every second with current stage
                 if (elapsed - lastProgressReportMs >= 1000L) {
                     lastProgressReportMs = elapsed
+                    val snapshot = synchronized(outputBuffer) { outputBuffer.toString() }
+                    val stage = detectStage(snapshot)
                     progressListener?.onLoadingProgress(
                         elapsedSeconds = (elapsed / 1000).toInt(),
-                        maxSeconds = (maxWaitMs / 1000).toInt()
+                        maxSeconds = (maxWaitMs / 1000).toInt(),
+                        stageMessage = stage
                     )
                 }
 
