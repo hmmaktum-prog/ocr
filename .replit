@@ -22,9 +22,9 @@ args = "Build APK"
 name = "Build APK"
 author = "agent"
 
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "export ANDROID_HOME=/home/runner/android-sdk && export PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools && ./gradlew assembleDebug --no-daemon 2>&1"
-
 [workflows.workflow.metadata]
 outputType = "console"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "chmod +x ./gradlew && export ANDROID_HOME=/home/runner/android-sdk && export PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools && ./gradlew assembleDebug --no-daemon 2>&1"

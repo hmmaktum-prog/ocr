@@ -123,16 +123,23 @@ class MainActivity : AppCompatActivity() {
             if (isDark) AppCompatDelegate.MODE_NIGHT_YES else AppCompatDelegate.MODE_NIGHT_NO
         )
 
-        // Toolbar Day/Night toggle
+        // Toolbar menu
         binding.toolbar.setOnMenuItemClickListener { item ->
-            if (item.itemId == R.id.action_toggle_theme) {
-                val currentlyDark = AppCompatDelegate.getDefaultNightMode() == AppCompatDelegate.MODE_NIGHT_YES
-                val newMode = if (currentlyDark) AppCompatDelegate.MODE_NIGHT_NO else AppCompatDelegate.MODE_NIGHT_YES
-                AppCompatDelegate.setDefaultNightMode(newMode)
-                getSharedPreferences("app_prefs", MODE_PRIVATE)
-                    .edit().putBoolean("dark_mode", !currentlyDark).apply()
-                true
-            } else false
+            when (item.itemId) {
+                R.id.action_toggle_theme -> {
+                    val currentlyDark = AppCompatDelegate.getDefaultNightMode() == AppCompatDelegate.MODE_NIGHT_YES
+                    val newMode = if (currentlyDark) AppCompatDelegate.MODE_NIGHT_NO else AppCompatDelegate.MODE_NIGHT_YES
+                    AppCompatDelegate.setDefaultNightMode(newMode)
+                    getSharedPreferences("app_prefs", MODE_PRIVATE)
+                        .edit().putBoolean("dark_mode", !currentlyDark).apply()
+                    true
+                }
+                R.id.action_device_info -> {
+                    showDeviceInfoDialog()
+                    true
+                }
+                else -> false
+            }
         }
 
         // Request POST_NOTIFICATIONS on Android 13+ for background processing notification
@@ -488,6 +495,48 @@ class MainActivity : AppCompatActivity() {
             .show()
     }
 
+    private fun showDeviceInfoDialog() {
+        val report = llamaServerManager.buildDeviceReport()
+
+        val sb = StringBuilder()
+        sb.appendLine(getString(R.string.device_info_model, report.deviceModel))
+        sb.appendLine(getString(R.string.device_info_android, report.androidVersion))
+        sb.appendLine(getString(R.string.device_info_abi, report.primaryAbi))
+        sb.appendLine()
+        sb.appendLine(getString(R.string.device_info_section_cpu))
+        sb.appendLine(getString(R.string.device_info_cpu_cores, report.totalCores, report.bigCores))
+        if (report.maxFreqMhz > 0) {
+            sb.appendLine(getString(R.string.device_info_cpu_freq, report.maxFreqMhz))
+        } else {
+            sb.appendLine(getString(R.string.device_info_cpu_freq_unknown))
+        }
+        sb.appendLine()
+        sb.appendLine(getString(R.string.device_info_section_gpu))
+        if (report.hasVulkan) {
+            sb.appendLine(getString(R.string.device_info_gpu_vulkan_yes))
+            sb.appendLine(getString(R.string.device_info_gpu_layers, report.gpuLayers))
+        } else {
+            sb.appendLine(getString(R.string.device_info_gpu_vulkan_no))
+        }
+        sb.appendLine()
+        sb.appendLine(getString(R.string.device_info_section_ram))
+        sb.appendLine(getString(R.string.device_info_ram_total, report.totalRamMb))
+        sb.appendLine(getString(R.string.device_info_ram_available, report.availableRamMb))
+        sb.appendLine()
+        sb.appendLine(getString(R.string.device_info_section_inference))
+        sb.appendLine(getString(R.string.device_info_threads, report.cpuThreads))
+        sb.appendLine(getString(R.string.device_info_ctx_size, report.contextSize))
+        if (report.gpuLayers > 0) {
+            sb.appendLine(getString(R.string.device_info_gpu_layers, report.gpuLayers))
+        }
+
+        AlertDialog.Builder(this)
+            .setTitle(getString(R.string.device_info_title))
+            .setMessage(sb.toString().trimEnd())
+            .setPositiveButton(android.R.string.ok, null)
+            .show()
+    }
+
     private fun handleFileSelected(uri: Uri) {
         val fileName = getFileName(uri)
         val mimeType = contentResolver.getType(uri)
@@ -553,13 +602,15 @@ class MainActivity : AppCompatActivity() {
         // Start foreground service — keeps process alive if user switches to another app
         startProcessingService()
 
+        val processingStartMs = System.currentTimeMillis()
+
         processingJob = lifecycleScope.launch(Dispatchers.IO) {
             try {
                 val extractedTexts = mutableListOf<String>()
                 val failedPages = mutableListOf<Int>()
 
                 if (isPdf) {
-                    processPdf(uri, extractedTexts, failedPages)
+                    processPdf(uri, extractedTexts, failedPages, processingStartMs)
                 } else {
                     processImage(uri, extractedTexts)
                 }
@@ -584,6 +635,8 @@ class MainActivity : AppCompatActivity() {
 
                 val result = ocrEngine.generateDocx(extractedTexts.toTypedArray(), outFile.absolutePath, getString(R.string.page_prefix))
 
+                val elapsedSec = ((System.currentTimeMillis() - processingStartMs) / 1000).toInt()
+
                 withContext(Dispatchers.Main) {
                     stopProcessingService()
                     setProcessingState(false)
@@ -594,7 +647,7 @@ class MainActivity : AppCompatActivity() {
                         binding.btnShare.visibility = View.VISIBLE
                         binding.btnSaveToDevice.visibility = View.VISIBLE
 
-                        val statusMsg = getString(R.string.status_saved_success, outFile.absolutePath)
+                        val statusMsg = getString(R.string.status_saved_success_timed, outFile.name, elapsedSec)
                         binding.statusText.text = if (failedPages.isNotEmpty()) {
                             statusMsg + "\n" + getString(
                                 R.string.status_ocr_partial_fail,
@@ -631,7 +684,7 @@ class MainActivity : AppCompatActivity() {
         return file
     }
 
-    private suspend fun processPdf(uri: Uri, extractedTexts: MutableList<String>, failedPages: MutableList<Int>) {
+    private suspend fun processPdf(uri: Uri, extractedTexts: MutableList<String>, failedPages: MutableList<Int>, startMs: Long = System.currentTimeMillis()) {
         val fd = contentResolver.openFileDescriptor(uri, "r")
             ?: throw Exception("Cannot open file")
 
@@ -659,13 +712,14 @@ class MainActivity : AppCompatActivity() {
             for (i in 0 until pageCount) {
                 currentCoroutineContext().ensureActive()
 
+                val elapsedSec = ((System.currentTimeMillis() - startMs) / 1000).toInt()
                 withContext(Dispatchers.Main) {
                     binding.progressBar.apply {
                         isIndeterminate = false
                         max = pageCount
                         progress = i + 1
                     }
-                    binding.statusText.text = getString(R.string.status_processing_pdf, i + 1, pageCount)
+                    binding.statusText.text = getString(R.string.status_processing_time_pages, i + 1, pageCount, elapsedSec)
                 }
 
                 renderer.openPage(i).use { page ->

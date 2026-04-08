@@ -97,4 +97,31 @@
     <string name="progress_description">প্রসেসিংয়ের অগ্রগতি</string>
     <string name="file_info">ফাইল: <xliff:g xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2" id="name">%1$s</xliff:g></string>
     <string name="share_document_chooser">ডকুমেন্ট শেয়ার করুন</string>
+
+    <!-- Menu -->
+    <string name="menu_device_info">ডিভাইস তথ্য</string>
+
+    <!-- Device Info Dialog -->
+    <string name="device_info_title">ডিভাইস ও পারফরম্যান্স তথ্য</string>
+    <string name="device_info_model">ডিভাইস: %1$s</string>
+    <string name="device_info_android">অপারেটিং সিস্টেম: %1$s</string>
+    <string name="device_info_abi">আর্কিটেকচার: %1$s</string>
+    <string name="device_info_cpu_cores">CPU কোর: মোট %1$d টি (%2$d টি বড় কোর ব্যবহৃত)</string>
+    <string name="device_info_cpu_freq">CPU সর্বোচ্চ গতি: %1$d MHz</string>
+    <string name="device_info_cpu_freq_unknown">CPU সর্বোচ্চ গতি: অজানা</string>
+    <string name="device_info_gpu_vulkan_yes">GPU ত্বরণ: Vulkan সমর্থিত</string>
+    <string name="device_info_gpu_vulkan_no">GPU ত্বরণ: পাওয়া যায়নি (শুধু CPU)</string>
+    <string name="device_info_gpu_layers">GPU লেয়ার অফলোড: %1$d / ৩২</string>
+    <string name="device_info_ram_total">মোট RAM: %1$d MB</string>
+    <string name="device_info_ram_available">বর্তমানে উপলব্ধ RAM: %1$d MB</string>
+    <string name="device_info_ctx_size">কনটেক্সট সাইজ: %1$d টোকেন</string>
+    <string name="device_info_threads">CPU থ্রেড (ইনফারেন্স): %1$d</string>
+    <string name="device_info_section_cpu">── CPU ──</string>
+    <string name="device_info_section_gpu">── GPU ──</string>
+    <string name="device_info_section_ram">── মেমোরি ──</string>
+    <string name="device_info_section_inference">── ইনফারেন্স কনফিগ ──</string>
+
+    <!-- OCR Timing -->
+    <string name="status_saved_success_timed">সংরক্ষিত: %1$s\nসময় লেগেছে: %2$d সেকেন্ড</string>
+    <string name="status_processing_time_pages">প্রসেস হচ্ছে… পৃষ্ঠা %1$d/%2$d (%3$d সেকেন্ড)</string>
 </resources>

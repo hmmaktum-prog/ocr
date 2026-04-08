@@ -93,3 +93,24 @@ Note: There are no quantized (Q4/Q8) versions in this repo. Both "Standard" mode
 4. PDFs are rendered page-by-page using Android's `PdfRenderer`
 5. Bitmaps are base64-encoded and sent to `127.0.0.1:8080/completion`
 6. Extracted text is compiled into a `.docx` file for sharing
+
+## Hardware / Benchmark Features (Added)
+
+### Device Info Dialog (Toolbar menu → ℹ icon)
+Accessible at any time via the toolbar. Shows:
+- **Device model & Android version, CPU architecture**
+- **CPU**: total core count, big core count used for inference, max frequency (MHz)
+- **GPU**: Vulkan availability, number of layers offloaded to GPU (out of 32)
+- **Memory**: Total RAM & currently available RAM
+- **Inference Config**: CPU threads used, context size (tokens), GPU layers
+
+### OCR Processing Time Display
+- PDF processing: live status shows "Page X/Y (Ns elapsed)" during multi-page processing
+- After completion: status shows filename and total time taken in seconds
+
+### Key files modified
+- `LlamaServerManager.kt`: Added `DeviceReport` data class + `buildDeviceReport()` method
+- `MainActivity.kt`: Added `showDeviceInfoDialog()`, timing tracking, updated toolbar menu handler
+- `menu_main.xml`: Added Device Info menu item with info icon
+- `ic_device_info.xml`: New info icon drawable
+- `strings.xml` / `values-bn/strings.xml`: All new UI strings in English + Bengali

@@ -28,6 +28,77 @@ class LlamaServerManager(private val context: Context) {
         private const val MAX_OUTPUT_SIZE = 10 * 1024 // 10KB
     }
 
+    /**
+     * Device hardware & inference configuration report.
+     * Shown to the user via the "Device Info" menu item.
+     */
+    data class DeviceReport(
+        val totalCores: Int,
+        val bigCores: Int,
+        val maxFreqMhz: Long,
+        val totalRamMb: Long,
+        val availableRamMb: Long,
+        val hasVulkan: Boolean,
+        val gpuLayers: Int,
+        val cpuThreads: Int,
+        val contextSize: Int,
+        val primaryAbi: String,
+        val androidVersion: String,
+        val deviceModel: String
+    )
+
+    /**
+     * Collects all hardware and inferred inference parameters for display.
+     */
+    fun buildDeviceReport(): DeviceReport {
+        val cpuCount = Runtime.getRuntime().availableProcessors()
+        var bigCores = cpuCount / 2
+        var maxFreqMhz = 0L
+        try {
+            val freqs = (0 until cpuCount).mapNotNull { i ->
+                File("/sys/devices/system/cpu/cpu$i/cpufreq/cpuinfo_max_freq")
+                    .takeIf { it.exists() }?.readText()?.trim()?.toLongOrNull()
+            }
+            if (freqs.isNotEmpty()) {
+                val maxFreq = freqs.max()
+                maxFreqMhz = maxFreq / 1000
+                bigCores = freqs.count { it >= maxFreq * 0.9 }.coerceAtLeast(2)
+            }
+        } catch (_: Exception) {}
+
+        val activityManager = context.getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager
+        val memInfo = android.app.ActivityManager.MemoryInfo()
+        activityManager.getMemoryInfo(memInfo)
+        val totalRamMb = memInfo.totalMem / (1024 * 1024)
+        val availableRamMb = memInfo.availMem / (1024 * 1024)
+
+        val hasVulkan = context.packageManager.hasSystemFeature(PackageManager.FEATURE_VULKAN_HARDWARE_LEVEL) ||
+                        context.packageManager.hasSystemFeature(PackageManager.FEATURE_VULKAN_HARDWARE_VERSION)
+
+        val gpuLayers = detectGpuLayers(totalRamMb)
+        val cpuThreads = detectBigCoreCount()
+        val contextSize = when {
+            totalRamMb < 3072 -> 2048
+            totalRamMb < 6144 -> 4096
+            else              -> 8192
+        }
+
+        return DeviceReport(
+            totalCores     = cpuCount,
+            bigCores       = bigCores,
+            maxFreqMhz     = maxFreqMhz,
+            totalRamMb     = totalRamMb,
+            availableRamMb = availableRamMb,
+            hasVulkan      = hasVulkan,
+            gpuLayers      = gpuLayers,
+            cpuThreads     = cpuThreads,
+            contextSize    = contextSize,
+            primaryAbi     = primaryAbi,
+            androidVersion = "Android ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})",
+            deviceModel    = "${Build.MANUFACTURER} ${Build.MODEL}"
+        )
+    }
+
     private var process: Process? = null
 
     // Synchronized access to process field for thread safety

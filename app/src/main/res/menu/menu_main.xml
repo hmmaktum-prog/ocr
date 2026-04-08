@@ -3,6 +3,12 @@
     xmlns:app="http://schemas.android.com/apk/res-auto">
 
     <item
+        android:id="@+id/action_device_info"
+        android:title="@string/menu_device_info"
+        android:icon="@drawable/ic_device_info"
+        app:showAsAction="always" />
+
+    <item
         android:id="@+id/action_toggle_theme"
         android:title="@string/menu_toggle_theme"
         android:icon="@drawable/ic_theme_toggle"

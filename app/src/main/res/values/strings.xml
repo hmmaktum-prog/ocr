@@ -43,6 +43,31 @@
     <string name="btn_preview">Preview Text</string>
     <string name="btn_save_to_device">Save to Device</string>
     <string name="menu_toggle_theme">Toggle Day/Night</string>
+    <string name="menu_device_info">Device Info</string>
+
+    <!-- Device Info Dialog -->
+    <string name="device_info_title">Device &amp; Performance Info</string>
+    <string name="device_info_model">Device: %1$s</string>
+    <string name="device_info_android">OS: %1$s</string>
+    <string name="device_info_abi">Architecture: %1$s</string>
+    <string name="device_info_cpu_cores">CPU Cores: %1$d total (%2$d big cores used)</string>
+    <string name="device_info_cpu_freq">CPU Max Frequency: %1$d MHz</string>
+    <string name="device_info_cpu_freq_unknown">CPU Max Frequency: Unknown</string>
+    <string name="device_info_gpu_vulkan_yes">GPU Acceleration: Vulkan available</string>
+    <string name="device_info_gpu_vulkan_no">GPU Acceleration: Not available (CPU only)</string>
+    <string name="device_info_gpu_layers">GPU Layers Offloaded: %1$d / 32</string>
+    <string name="device_info_ram_total">Total RAM: %1$d MB</string>
+    <string name="device_info_ram_available">Available RAM: %1$d MB</string>
+    <string name="device_info_ctx_size">Context Size: %1$d tokens</string>
+    <string name="device_info_threads">CPU Threads (inference): %1$d</string>
+    <string name="device_info_section_cpu">── CPU ──</string>
+    <string name="device_info_section_gpu">── GPU ──</string>
+    <string name="device_info_section_ram">── Memory ──</string>
+    <string name="device_info_section_inference">── Inference Config ──</string>
+
+    <!-- OCR Timing -->
+    <string name="status_saved_success_timed">Saved: %1$s\nTime: %2$d sec</string>
+    <string name="status_processing_time_pages">Processing… Page %1$d/%2$d  (%3$ds elapsed)</string>
     <string name="status_saved_to_device">File saved successfully to your chosen location.</string>
     <string name="error_save_failed">Failed to save file. Please try again.</string>
 
