@@ -175,4 +175,11 @@
     <string name="device_info_cpu_temp_hot">CPU তাপমাত্রা: %1$.1f°C  ⚠ অতিরিক্ত গরম</string>
     <string name="device_info_cpu_temp_unknown">CPU তাপমাত্রা: অজানা</string>
     <string name="device_info_section_thermal">── তাপীয় তথ্য ──</string>
+
+    <!-- Actions and modes (missing translations) -->
+    <string name="action_copy">কপি করুন</string>
+    <string name="action_save_export">পিডিএফ/ডকস এক্সপোর্ট করুন</string>
+    <string name="mode_fast">⚡ দ্রুত</string>
+    <string name="mode_hq">🔍 উচ্চ মান</string>
+    <string name="state_thinking">ভাবছে…</string>
 </resources>
