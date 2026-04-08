@@ -50,6 +50,41 @@ class OcrEngine {
         return Bitmap.createScaledBitmap(bitmap, newWidth, newHeight, true)
     }
 
+    private fun buildChatRequestBody(base64Image: String, stream: Boolean): JSONObject {
+        val imageContent = JSONObject().apply {
+            put("type", "image_url")
+            put("image_url", JSONObject().apply {
+                put("url", "data:image/jpeg;base64,$base64Image")
+            })
+        }
+        val textContent = JSONObject().apply {
+            put("type", "text")
+            put("text", "You are an OCR engine. Transcribe every piece of text visible in this image exactly as it appears. Preserve line breaks and layout. Output only the transcribed text with no commentary.")
+        }
+        val messagesArray = JSONArray().apply {
+            put(JSONObject().apply {
+                put("role", "user")
+                put("content", JSONArray().apply {
+                    put(imageContent)
+                    put(textContent)
+                })
+            })
+        }
+        return JSONObject().apply {
+            put("model", "paddleocr")
+            put("messages", messagesArray)
+            put("max_tokens", 4096)
+            put("temperature", 0.1)
+            put("repeat_penalty", 1.15)
+            put("stream", stream)
+            put("stop", JSONArray().apply {
+                put("<|im_end|>")
+                put("<|endoftext|>")
+                put("</s>")
+            })
+        }
+    }
+
     suspend fun processImage(bitmap: Bitmap): Result<OcrResult> {
         var resized: Bitmap? = null
         return try {
@@ -60,23 +95,11 @@ class OcrEngine {
             base64Out.close()
             val base64Image = outputStream.toString("UTF-8")
 
-            val jsonBody = JSONObject().apply {
-                put("prompt", "Analyze the image and transcribe all the text found inside it:\n[img-1]")
-                val imagesArray = JSONArray().apply {
-                    put(JSONObject().apply {
-                        put("data", base64Image)
-                        put("id", 1)
-                    })
-                }
-                put("image_data", imagesArray)
-                put("n_predict", 4096)    // বড় পেজে বেশি token দরকার (ছিল 1024)
-                put("temperature", 0.1)
-                put("stream", false)
-            }
+            val jsonBody = buildChatRequestBody(base64Image, stream = false)
 
             val requestBody = jsonBody.toString().toRequestBody("application/json".toMediaType())
             val request = Request.Builder()
-                .url(LlamaServerManager.SERVER_URL)
+                .url(LlamaServerManager.CHAT_URL)
                 .post(requestBody)
                 .build()
 
@@ -93,7 +116,6 @@ class OcrEngine {
                             }
                             throw IOException("Server returned HTTP ${response.code}: ${response.message}")
                         }
-                        // Cap response body at 5MB — large OCR pages can produce long text
                         responseBody = response.body?.source()?.readUtf8(5_000_000) ?: ""
                     }
                     if (responseBody.isNotEmpty()) break
@@ -101,7 +123,6 @@ class OcrEngine {
                     if (attempt > 2) throw IOException("Server returned empty response after 3 attempts")
                     kotlinx.coroutines.delay(1000L * attempt)
                 } catch (e: Exception) {
-                    // Fix LOGIC-14: retry on SocketTimeoutException too (transient failure)
                     val isRetryable = attempt < 2 && (
                         e is java.net.SocketTimeoutException ||
                         e.message?.contains("503") == true ||
@@ -121,24 +142,30 @@ class OcrEngine {
                 throw IOException("Invalid server response format: ${responseBody.take(100)}")
             }
 
-                // Server error হলে "error" field থাকে — silent empty response এড়াতে চেক করো
-                if (jsonResponse.has("error")) {
-                    val errMsg = jsonResponse.optString("error", "Unknown server error")
-                    throw IOException("llama-server error: $errMsg")
-                }
+            if (jsonResponse.has("error")) {
+                val errMsg = jsonResponse.optString("error", "Unknown server error")
+                throw IOException("llama-server error: $errMsg")
+            }
 
-                val content = jsonResponse.optString("content", "")
-                if (content.isEmpty()) {
-                    Log.w(TAG, "Server returned empty content")
-                }
+            // Parse chat completions response: choices[0].message.content
+            val content = jsonResponse
+                .optJSONArray("choices")
+                ?.optJSONObject(0)
+                ?.optJSONObject("message")
+                ?.optString("content", "")
+                ?: ""
 
-                // Extract tokens/second from llama-server timings
-                val tokPerSec = jsonResponse.optJSONObject("timings")
-                    ?.optDouble("predicted_per_second")
-                    ?.takeIf { it.isFinite() && it > 0.0 }
-                Log.d(TAG, "OCR complete: ${content.length} chars, tok/s=${tokPerSec ?: "N/A"}")
+            if (content.isEmpty()) {
+                Log.w(TAG, "Server returned empty content")
+            }
 
-                Result.success(OcrResult(text = content.trim(), tokensPerSecond = tokPerSec))
+            // Extract tok/s from timings (llama-server extension field)
+            val tokPerSec = jsonResponse.optJSONObject("timings")
+                ?.optDouble("predicted_per_second")
+                ?.takeIf { it.isFinite() && it > 0.0 }
+            Log.d(TAG, "OCR complete: ${content.length} chars, tok/s=${tokPerSec ?: "N/A"}")
+
+            Result.success(OcrResult(text = content.trim(), tokensPerSecond = tokPerSec))
         } catch (e: Exception) {
             Log.e(TAG, "processImage failed", e)
             Result.failure(e)
@@ -150,7 +177,6 @@ class OcrEngine {
     }
 
     fun processImageStreaming(bitmap: Bitmap, maxDimension: Int = 1536): Flow<StreamToken> = flow {
-        val startMs = System.currentTimeMillis()
         emit(StreamToken.Thinking(0))
         var resized: Bitmap? = null
         try {
@@ -161,23 +187,11 @@ class OcrEngine {
             base64Out.close()
             val base64Image = outputStream.toString("UTF-8")
 
-            val jsonBody = JSONObject().apply {
-                put("prompt", "Analyze the image and transcribe all the text found inside it:\n[img-1]")
-                val imagesArray = JSONArray().apply {
-                    put(JSONObject().apply {
-                        put("data", base64Image)
-                        put("id", 1)
-                    })
-                }
-                put("image_data", imagesArray)
-                put("n_predict", 4096)
-                put("temperature", 0.1)
-                put("stream", true)
-            }
+            val jsonBody = buildChatRequestBody(base64Image, stream = true)
 
             val requestBody = jsonBody.toString().toRequestBody("application/json".toMediaType())
             val request = Request.Builder()
-                .url(LlamaServerManager.SERVER_URL)
+                .url(LlamaServerManager.CHAT_URL)
                 .post(requestBody)
                 .addHeader("Accept", "text/event-stream")
                 .build()
@@ -210,12 +224,18 @@ class OcrEngine {
                                 emit(StreamToken.Error(json.optString("error")))
                                 return@use
                             }
-                            val content = json.optString("content", "")
+                            // Chat completions streaming: choices[0].delta.content
+                            val choices = json.optJSONArray("choices")
+                            val delta = choices?.optJSONObject(0)?.optJSONObject("delta")
+                            val content = delta?.optString("content", "") ?: ""
                             if (content.isNotEmpty()) {
                                 fullText.append(content)
                                 emit(StreamToken.Text(content))
                             }
-                            if (json.optBoolean("stop", false)) {
+                            // Check finish_reason for stop signal
+                            val finishReason = choices?.optJSONObject(0)?.optString("finish_reason")
+                            if (finishReason == "stop" || finishReason == "length") {
+                                // Try to extract tok/s from timings extension or usage
                                 tokensPerSecond = json.optJSONObject("timings")
                                     ?.optDouble("predicted_per_second")
                                     ?.takeIf { it.isFinite() && it > 0.0 }
