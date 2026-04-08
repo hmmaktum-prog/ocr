@@ -45,8 +45,9 @@ class OcrProcessingService : Service() {
         super.onDestroy()
     }
 
-    private fun buildNotification(): Notification {
-        val openAppIntent = PendingIntent.getActivity(
+    // Fix MEDIUM-35: Extract duplicate PendingIntent creation
+    private fun createOpenAppPendingIntent(): PendingIntent {
+        return PendingIntent.getActivity(
             this,
             0,
             Intent(this, MainActivity::class.java).apply {
@@ -54,32 +55,27 @@ class OcrProcessingService : Service() {
             },
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
+    }
 
+    private fun buildNotification(): Notification {
         return Notification.Builder(this, CHANNEL_ID)
             .setContentTitle(getString(R.string.notif_processing_title))
             .setContentText(getString(R.string.notif_processing_text))
             .setSmallIcon(R.drawable.ic_document)
-            .setContentIntent(openAppIntent)
+            .setContentIntent(createOpenAppPendingIntent())
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .build()
     }
 
-    fun updateProgress(currentPage: Int, totalPages: Int) {
-        val openAppIntent = PendingIntent.getActivity(
-            this,
-            0,
-            Intent(this, MainActivity::class.java).apply {
-                flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
-            },
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-
+    // Fix MEDIUM-32: Made private — only called via onStartCommand Intent
+    private fun updateProgress(currentPage: Int, totalPages: Int) {
+        // Fix MEDIUM-33: Use string resource instead of hardcoded English
         val notification = Notification.Builder(this, CHANNEL_ID)
             .setContentTitle(getString(R.string.notif_processing_title))
-            .setContentText("Processing page $currentPage of $totalPages")
+            .setContentText(getString(R.string.status_processing_pdf, currentPage, totalPages))
             .setSmallIcon(R.drawable.ic_document)
-            .setContentIntent(openAppIntent)
+            .setContentIntent(createOpenAppPendingIntent())
             .setProgress(totalPages, currentPage, false)
             .setOngoing(true)
             .setOnlyAlertOnce(true)

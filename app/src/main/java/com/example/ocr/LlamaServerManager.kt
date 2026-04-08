@@ -14,6 +14,7 @@ import java.util.concurrent.TimeUnit
 class LlamaServerManager(private val context: Context) {
     companion object {
         private const val TAG = "LlamaServerManager"
+        // Fix MEDIUM-16: Hardcoded port. TODO: Implement dynamic port/conflict detection.
         private const val SERVER_PORT = 8080
         const val SERVER_URL = "http://127.0.0.1:${SERVER_PORT}/completion"
         const val CHAT_URL = "http://127.0.0.1:${SERVER_PORT}/v1/chat/completions"
@@ -86,19 +87,10 @@ class LlamaServerManager(private val context: Context) {
      */
     fun buildDeviceReport(): DeviceReport {
         val cpuCount = Runtime.getRuntime().availableProcessors()
-        var bigCores = cpuCount / 2
-        var maxFreqMhz = 0L
-        try {
-            val freqs = (0 until cpuCount).mapNotNull { i ->
-                File("/sys/devices/system/cpu/cpu$i/cpufreq/cpuinfo_max_freq")
-                    .takeIf { it.exists() }?.readText()?.trim()?.toLongOrNull()
-            }
-            if (freqs.isNotEmpty()) {
-                val maxFreq = freqs.max()
-                maxFreqMhz = maxFreq / 1000
-                bigCores = freqs.count { it >= maxFreq * 0.9 }.coerceAtLeast(2)
-            }
-        } catch (_: Exception) {}
+        // Fix HIGH-04: Use cached cpuInfo instead of duplicating CPU detection logic
+        val info = cpuInfo
+        val bigCores = info.bigCoreCount
+        val maxFreqMhz = info.maxFreqMhz / 1000
 
         val activityManager = context.getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager
         val memInfo = android.app.ActivityManager.MemoryInfo()
@@ -312,8 +304,13 @@ class LlamaServerManager(private val context: Context) {
                 return@withContext StartResult.Error("Projector file not found: $mmprojPath")
             }
 
-            // Step 4: পুরনো প্রসেস বন্ধ করো
+            // Step 4: পুরনো প্রসেস বন্ধ করো এবং কোনো Orphan প্রসেস থাকলে তা কিল করো
             stopServer()
+            try {
+                Runtime.getRuntime().exec(arrayOf("sh", "-c", "killall -9 libllama_server.so")).waitFor()
+            } catch (e: Exception) {
+                // Ignore if killall is unavailable
+            }
 
             // Step 5: Device RAM ও CPU অনুযায়ী parameters নির্ধারণ করো
             val activityManager = context.getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager
@@ -386,13 +383,17 @@ class LlamaServerManager(private val context: Context) {
 
         val maxWaitMs = 300_000L   // 5 minutes — large model on emulator needs more time
         val checkIntervalMs = 500L  // Check every 500ms for faster crash detection
-        var elapsed = 0L
+        
+        // Fix MEDIUM-15: Use System.currentTimeMillis for accurate elapsed tracking
+        val startTime = System.currentTimeMillis()
         var lastProgressReportMs = 0L
 
         try {
-            while (elapsed < maxWaitMs) {
+            while (true) {
+                val elapsed = System.currentTimeMillis() - startTime
+                if (elapsed >= maxWaitMs) break
+                
                 delay(checkIntervalMs)
-                elapsed += checkIntervalMs
 
                 // Report progress to UI every second with current stage
                 if (elapsed - lastProgressReportMs >= 1000L) {

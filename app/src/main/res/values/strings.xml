@@ -99,6 +99,9 @@
     <string name="error_save_failed">Failed to save file. Please try again.</string>
 
     <!-- App Onboarding -->
+    <string name="dialog_clear_title">Clear Chat?</string>
+    <string name="dialog_clear_message">Are you sure you want to clear all messages? This action cannot be undone.</string>
+
     <string name="onboarding_title">Welcome to PaddleOCR-VL</string>
     <string name="onboarding_message">This app runs a powerful OCR engine completely offline on your device.\n\nTo begin, you will need to download the AI models (~500MB). A Wi-Fi connection is highly recommended.</string>
     <string name="preview_title">Extracted Text</string>
@@ -169,4 +172,25 @@
     <string name="progress_description">Processing progress</string>
     <string name="file_info">File: <xliff:g xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2" id="name">%1$s</xliff:g></string>
     <string name="share_document_chooser">Share Document</string>
+
+    <!-- Missing Strings from Code and Layouts -->
+    <string name="cd_app_logo">App Logo</string>
+    <string name="empty_state_title">OCR Scanner</string>
+    <string name="empty_state_subtitle">To get started, tap the + below to add an image or PDF.</string>
+    <string name="btn_add_file">Add File</string>
+    <string name="hint_select_file">Select an image or PDF…</string>
+    <string name="hint_processing">Processing…</string>
+    <string name="cd_bot_avatar">Bot Avatar</string>
+    <string name="cd_thumbnail">Document Thumbnail</string>
+    <string name="btn_copy">Copy</string>
+    <string name="btn_markdown_raw">Raw</string>
+    <string name="btn_markdown_formatted">Formatted</string>
+    <string name="btn_save_docx">Export</string>
+    <string name="default_document_name">document</string>
+    <string name="file_size_display">%1$s%2$.1f MB</string>
+    <string name="status_copied">Copied to clipboard</string>
+    <string name="timing_page_progress">Page %1$d/%2$d</string>
+    <string name="timing_elapsed">%1$s⏱ %2$ds</string>
+    <string name="timing_done">%1$s⏱ %2$ds%3$s</string>
+    <string name="error_prefix">Error: %1$s</string>
 </resources>

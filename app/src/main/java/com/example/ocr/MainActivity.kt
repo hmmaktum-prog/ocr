@@ -61,6 +61,7 @@ class MainActivity : AppCompatActivity() {
     private var processingJob: Job? = null
     private var engineLoadingJob: Job? = null
     private var downloadJob: Job? = null
+    private var ramUpdateJob: Job? = null
     private var isEngineReady: Boolean = false
 
     private val saveDocumentLauncher = registerForActivityResult(
@@ -80,10 +81,12 @@ class MainActivity : AppCompatActivity() {
                     src.inputStream().use { it.copyTo(out) }
                 }
                 withContext(Dispatchers.Main) {
-                    Toast.makeText(this@MainActivity, getString(R.string.status_saved_to_device), Toast.LENGTH_LONG).show()
+                    com.google.android.material.snackbar.Snackbar.make(binding.root, getString(R.string.status_saved_to_device), com.google.android.material.snackbar.Snackbar.LENGTH_LONG).show()
                 }
             } catch (e: Exception) {
-                withContext(Dispatchers.Main) { Toast.makeText(this@MainActivity, getString(R.string.error_save_failed), Toast.LENGTH_SHORT).show() }
+                withContext(Dispatchers.Main) { 
+                    com.google.android.material.snackbar.Snackbar.make(binding.root, getString(R.string.error_save_failed), com.google.android.material.snackbar.Snackbar.LENGTH_SHORT).show() 
+                }
             }
         }
     }
@@ -101,6 +104,8 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        
+        binding.topAppBar.inflateMenu(R.menu.menu_main)
 
         downloader = ModelDownloader(this)
         llamaServerManager = LlamaServerManager(this)
@@ -111,16 +116,25 @@ class MainActivity : AppCompatActivity() {
             if (isDark) AppCompatDelegate.MODE_NIGHT_YES else AppCompatDelegate.MODE_NIGHT_NO
         )
 
-        chatAdapter = ChatAdapter(this) { msg ->
-            val baseDir = getExternalFilesDir(null) ?: filesDir
-            val outFile = File(baseDir, "temp_export.docx")
-            val success = ocrEngine.generateDocx(arrayOf(msg.streamedText), outFile.absolutePath, "Page")
-            if (success) {
-                saveDocumentLauncher.launch((msg.fileName ?: "document").substringBeforeLast(".") + ".docx")
-            } else {
-                Toast.makeText(this, "Failed to generate Docx", Toast.LENGTH_SHORT).show()
+        chatAdapter = ChatAdapter(this,
+            onExportClicked = { msg ->
+                val baseDir = getExternalFilesDir(null) ?: filesDir
+                val outFile = File(baseDir, "temp_export.docx")
+                val exportTexts = if (msg.pagesContent.isNotEmpty()) msg.pagesContent.toTypedArray() else arrayOf(msg.streamedText)
+                val success = ocrEngine.generateDocx(exportTexts, outFile.absolutePath, "Page")
+                if (success) {
+                    saveDocumentLauncher.launch((msg.fileName ?: "document").substringBeforeLast(".") + ".docx")
+                } else {
+                    com.google.android.material.snackbar.Snackbar.make(binding.root, getString(R.string.status_saved_failed), com.google.android.material.snackbar.Snackbar.LENGTH_SHORT).show()
+                }
+            },
+            onImageClicked = { path ->
+                showImagePreview(path)
+            },
+            onShareClicked = { msg ->
+                shareText(msg.streamedText)
             }
-        }
+        )
         val layoutManager = LinearLayoutManager(this)
         layoutManager.stackFromEnd = true
         binding.chatRecyclerView.layoutManager = layoutManager
@@ -137,6 +151,25 @@ class MainActivity : AppCompatActivity() {
                     getSharedPreferences("app_prefs", MODE_PRIVATE).edit().putBoolean("dark_mode", !currentlyDark).apply()
                     true
                 }
+                R.id.action_clear -> {
+                    if (chatAdapter.itemCount > 0) {
+                        AlertDialog.Builder(this@MainActivity)
+                            .setTitle(getString(R.string.dialog_clear_title))
+                            .setMessage(getString(R.string.dialog_clear_message))
+                            .setPositiveButton(getString(R.string.dialog_yes)) { _, _ ->
+                                chatAdapter.clearMessages()
+                                binding.emptyStateLayout.visibility = View.VISIBLE
+                                com.google.android.material.snackbar.Snackbar.make(binding.root, "Chat cleared", com.google.android.material.snackbar.Snackbar.LENGTH_SHORT).show()
+                                
+                                lifecycleScope.launch(Dispatchers.IO) {
+                                    cacheDir.listFiles()?.forEach { if (it.name.startsWith("thumb_")) it.delete() }
+                                }
+                            }
+                            .setNegativeButton(getString(R.string.dialog_no), null)
+                            .show()
+                    }
+                    true
+                }
                 R.id.action_device_info -> {
                     showDeviceInfoDialog()
                     true
@@ -150,7 +183,13 @@ class MainActivity : AppCompatActivity() {
                     llamaServerManager.batterySaverMode = newMode
                     item.isChecked = newMode
                     val msg = if (newMode) getString(R.string.battery_saver_on) else getString(R.string.battery_saver_off)
-                    Toast.makeText(this, msg, Toast.LENGTH_LONG).show()
+                    Toast.makeText(this@MainActivity, msg, Toast.LENGTH_LONG).show()
+                    
+                    if (isEngineReady) {
+                        llamaServerManager.stopServer()
+                        isEngineReady = false
+                        initEngine()
+                    }
                     true
                 }
                 else -> false
@@ -166,6 +205,36 @@ class MainActivity : AppCompatActivity() {
         setupButtons()
         setupBackPressHandler()
         checkStartupState()
+    }
+
+    private fun shareText(text: String) {
+        val sendIntent = Intent().apply {
+            action = Intent.ACTION_SEND
+            putExtra(Intent.EXTRA_TEXT, text)
+            type = "text/plain"
+        }
+        val shareIntent = Intent.createChooser(sendIntent, null)
+        startActivity(shareIntent)
+    }
+
+    private fun showImagePreview(imagePath: String) {
+        val dialog = android.app.Dialog(this, android.R.style.Theme_Black_NoTitleBar_Fullscreen)
+        dialog.setContentView(R.layout.dialog_image_preview)
+        val imageView = dialog.findViewById<android.widget.ImageView>(R.id.fullScreenImageView)
+        val btnClose = dialog.findViewById<android.widget.ImageButton>(R.id.btnClosePreview)
+
+        lifecycleScope.launch(Dispatchers.IO) {
+            val bitmap = BitmapFactory.decodeFile(imagePath)
+            withContext(Dispatchers.Main) {
+                if (bitmap != null) {
+                    imageView.setImageBitmap(bitmap)
+                }
+            }
+        }
+
+        btnClose.setOnClickListener { dialog.dismiss() }
+        imageView.setOnClickListener { dialog.dismiss() } // Tap to close
+        dialog.show()
     }
 
     private fun startProcessingService() {
@@ -186,7 +255,7 @@ class MainActivity : AppCompatActivity() {
         binding.mainProgressIndicator.visibility = if (loading) View.VISIBLE else View.GONE
         if (!loading && isEngineReady) {
             binding.addFileButton.isEnabled = true
-            binding.chatInputHint.text = "Select an image or PDF to OCR..."
+            binding.chatInputHint.text = getString(R.string.hint_select_file)
         }
     }
 
@@ -225,6 +294,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        startLiveRamUpdates()
         if (isEngineReady) {
             lifecycleScope.launch {
                 if (!llamaServerManager.isServerAlive()) {
@@ -233,6 +303,33 @@ class MainActivity : AppCompatActivity() {
                     setMainState(getString(R.string.status_engine_reloading), true)
                     initEngine()
                 }
+            }
+        }
+    }
+
+    override fun onPause() {
+        super.onPause()
+        ramUpdateJob?.cancel()
+    }
+
+    private fun startLiveRamUpdates() {
+        ramUpdateJob?.cancel()
+        ramUpdateJob = lifecycleScope.launch(Dispatchers.Main) {
+            val activityManager = getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+            val memInfo = ActivityManager.MemoryInfo()
+            while (isActive) {
+                activityManager.getMemoryInfo(memInfo)
+                val totalRam = memInfo.totalMem / (1024 * 1024)
+                val availRam = memInfo.availMem / (1024 * 1024)
+                val usedRam = totalRam - availRam
+                binding.ramUsageText.text = "RAM: ${usedRam}MB / ${totalRam}MB"
+                
+                if (memInfo.lowMemory) {
+                    binding.ramUsageText.setTextColor(android.graphics.Color.RED)
+                } else {
+                    binding.ramUsageText.setTextColor(ContextCompat.getColor(this@MainActivity, R.color.seed))
+                }
+                delay(1000)
             }
         }
     }
@@ -279,9 +376,7 @@ class MainActivity : AppCompatActivity() {
         })
     }
 
-    override fun onConfigurationChanged(newConfig: android.content.res.Configuration) {
-        super.onConfigurationChanged(newConfig)
-    }
+
 
     private fun showEngineCancelDialog() {
         AlertDialog.Builder(this)
@@ -345,7 +440,7 @@ class MainActivity : AppCompatActivity() {
         downloadJob = lifecycleScope.launch {
             downloader.checkAndDownloadModels(
                 onProgress = { overallPercent, fileName, fileIndex, totalFiles ->
-                    runOnUiThread {
+                    lifecycleScope.launch(Dispatchers.Main) {
                         setMainState(getString(
                             R.string.status_downloading_model_detail,
                             fileIndex + 1, totalFiles, fileName, overallPercent
@@ -353,7 +448,7 @@ class MainActivity : AppCompatActivity() {
                     }
                 },
                 onComplete = { success ->
-                    runOnUiThread {
+                    lifecycleScope.launch(Dispatchers.Main) {
                         downloadJob = null
                         if (success) {
                             setMainState(getString(R.string.status_models_ready), false)
@@ -416,7 +511,7 @@ class MainActivity : AppCompatActivity() {
         llamaServerManager.setLoadingProgressListener(
             object : LlamaServerManager.LoadingProgressListener {
                 override fun onLoadingProgress(elapsedSeconds: Int, maxSeconds: Int, stageMessage: String) {
-                    runOnUiThread {
+                    lifecycleScope.launch(Dispatchers.Main) {
                         setMainState(getString(
                             R.string.status_engine_loading_stage,
                             stageMessage, elapsedSeconds
@@ -441,7 +536,7 @@ class MainActivity : AppCompatActivity() {
                         binding.startEngineButton.visibility = View.GONE
                         binding.emptyStateLayout.visibility = if (chatAdapter.itemCount == 0) View.VISIBLE else View.GONE
                         setMainState(getString(R.string.status_engine_ready), false)
-                        binding.chatInputHint.text = "Select an image or PDF to OCR..."
+                        binding.chatInputHint.text = getString(R.string.hint_select_file)
                     }
                     is LlamaServerManager.StartResult.InvalidBinary -> {
                         setMainState(getString(R.string.status_engine_failed), false)
@@ -559,7 +654,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun handleFileSelected(uri: Uri) {
         if (!isEngineReady) {
-            Toast.makeText(this, "Wait for engine to be ready.", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, getString(R.string.error_engine_not_ready), Toast.LENGTH_SHORT).show()
             return
         }
 
@@ -583,7 +678,7 @@ class MainActivity : AppCompatActivity() {
             fileSizeMb = getFileSizeMb(uri)
         )
         chatAdapter.addMessage(userMsg)
-        binding.chatRecyclerView.scrollToPosition(chatAdapter.itemCount - 1)
+        binding.chatRecyclerView.smoothScrollToPosition(chatAdapter.itemCount - 1)
 
         lifecycleScope.launch {
             val thumb = withContext(Dispatchers.IO) { loadThumbnail(uri, isPdf) }
@@ -636,12 +731,12 @@ class MainActivity : AppCompatActivity() {
     private fun setProcessingUIVisible(processing: Boolean) {
         if (processing) {
             binding.addFileButton.isEnabled = false
-            binding.chatInputHint.text = "Processing..."
+            binding.chatInputHint.text = getString(R.string.hint_processing)
             binding.cancelButton.visibility = View.VISIBLE
             binding.qualityChip.isEnabled = false
         } else {
             binding.addFileButton.isEnabled = true
-            binding.chatInputHint.text = "Select an image or PDF to OCR..."
+            binding.chatInputHint.text = getString(R.string.hint_select_file)
             binding.cancelButton.visibility = View.GONE
             binding.qualityChip.isEnabled = true
         }
@@ -689,17 +784,17 @@ class MainActivity : AppCompatActivity() {
         val fd = contentResolver.openFileDescriptor(uri, "r")
             ?: throw Exception("Cannot open file")
 
-        val renderer: PdfRenderer
         try {
-            renderer = PdfRenderer(fd)
-        } catch (e: SecurityException) {
-            fd.close()
-            throw Exception(getString(R.string.error_pdf_password_protected))
-        }
+            val renderer: PdfRenderer
+            try {
+                renderer = PdfRenderer(fd)
+            } catch (e: SecurityException) {
+                throw Exception(getString(R.string.error_pdf_password_protected))
+            }
 
-        try {
-            val pageCount = renderer.pageCount
-            if (pageCount == 0) throw Exception(getString(R.string.error_pdf_empty))
+            try {
+                val pageCount = renderer.pageCount
+                if (pageCount == 0) throw Exception(getString(R.string.error_pdf_empty))
 
             val (defaultWidth, defaultHeight) = renderer.openPage(0).use { page ->
                 Pair(page.width, page.height)
@@ -707,91 +802,147 @@ class MainActivity : AppCompatActivity() {
 
             val availableMemMb = getAvailableMemoryMb()
             val maxDim = if (isFastMode) 1536 else Int.MAX_VALUE
-            val baseScale = calculateSafeScale(defaultWidth, defaultHeight, availableMemMb)
+            val baseScale = calculateSafeScale(defaultWidth, defaultHeight, availableMemMb, maxDim)
 
-            var accumulatedText = ""
+            var accumulatedPreviousPagesText = ""
             var currentTokPerSec: Double? = null
 
-            for (i in 0 until pageCount) {
-                currentCoroutineContext().ensureActive()
-                val elapsedSec = ((System.currentTimeMillis() - startMs) / 1000).toInt()
+            val channel = kotlinx.coroutines.channels.Channel<Pair<Int, Bitmap>>(capacity = 2)
 
-                withContext(Dispatchers.Main) {
-                    chatAdapter.updateBotMessage(msgId) {
-                        it.state = ChatMessage.BotState.STREAMING
-                        it.currentPage = i + 1
-                        it.totalPages = pageCount
-                        it.elapsedSeconds = elapsedSec
-                        it.streamedText = accumulatedText
+            val renderJob = launch(Dispatchers.Default) {
+                try {
+                    for (i in 0 until pageCount) {
+                        currentCoroutineContext().ensureActive()
+                        val bmp = renderer.openPage(i).use { page ->
+                            val pageScale = if (page.width != defaultWidth) {
+                                calculateSafeScale(page.width, page.height, availableMemMb, maxDim)
+                            } else baseScale
+
+                            val bitmap = Bitmap.createBitmap(
+                                (page.width * pageScale).toInt().coerceAtLeast(1),
+                                (page.height * pageScale).toInt().coerceAtLeast(1),
+                                Bitmap.Config.ARGB_8888
+                            )
+                            page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_PRINT)
+                            bitmap
+                        }
+                        channel.send(Pair(i, bmp))
                     }
-                    binding.chatRecyclerView.scrollToPosition(chatAdapter.itemCount - 1)
+                } catch (e: Exception) {
+                    if (e !is CancellationException) Log.e(TAG, "Render exception", e)
+                } finally {
+                    channel.close()
                 }
+            }
 
-                Intent(this@MainActivity, OcrProcessingService::class.java).also { intent ->
-                    intent.action = "UPDATE_PROGRESS"
-                    intent.putExtra("CURRENT_PAGE", i + 1)
-                    intent.putExtra("TOTAL_PAGES", pageCount)
-                    startService(intent)
-                }
+            try {
+                for (item in channel) {
+                    val i = item.first
+                    val bitmap = item.second
 
-                renderer.openPage(i).use { page ->
-                    val pageScale = if (page.width != defaultWidth) {
-                        calculateSafeScale(page.width, page.height, availableMemMb)
-                    } else baseScale
+                    currentCoroutineContext().ensureActive()
+                    val elapsedSec = ((System.currentTimeMillis() - startMs) / 1000).toInt()
+                    var currentPageText = ""
 
-                    val bitmap = Bitmap.createBitmap(
-                        (page.width * pageScale).toInt().coerceAtLeast(1),
-                        (page.height * pageScale).toInt().coerceAtLeast(1),
-                        Bitmap.Config.ARGB_8888
-                    )
-                    page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_PRINT)
+                    withContext(Dispatchers.Main) {
+                        chatAdapter.updateBotMessage(msgId) {
+                            it.state = ChatMessage.BotState.STREAMING
+                            it.currentPage = i + 1
+                            it.totalPages = pageCount
+                            it.elapsedSeconds = elapsedSec
+                            it.streamedText = accumulatedPreviousPagesText
+                        }
+                        binding.chatRecyclerView.smoothScrollToPosition(chatAdapter.itemCount - 1)
+                    }
+
+                    Intent(this@MainActivity, OcrProcessingService::class.java).also { intent ->
+                        intent.action = "UPDATE_PROGRESS"
+                        intent.putExtra("CURRENT_PAGE", i + 1)
+                        intent.putExtra("TOTAL_PAGES", pageCount)
+                        startService(intent)
+                    }
 
                     try {
+                        var lastUiUpdate = 0L
                         ocrEngine.processImageStreaming(bitmap, maxDim)
                             .onCompletion { bitmap.recycle() }
                             .collect { token ->
                                 currentCoroutineContext().ensureActive()
-                                val nowSec = ((System.currentTimeMillis() - startMs) / 1000).toInt()
-                                withContext(Dispatchers.Main) {
-                                    chatAdapter.updateBotMessage(msgId) {
-                                        when (token) {
-                                            is OcrEngine.StreamToken.Text -> {
-                                                it.streamedText = accumulatedText + token.content
+                                val nowMs = System.currentTimeMillis()
+                                val nowSec = ((nowMs - startMs) / 1000).toInt()
+                                
+                                val isDone = token is OcrEngine.StreamToken.Done || token is OcrEngine.StreamToken.Error
+
+                                when (token) {
+                                    is OcrEngine.StreamToken.Text -> currentPageText += token.content
+                                    is OcrEngine.StreamToken.Error -> currentPageText += "\n\n[Page Error: ${token.message}]\n\n"
+                                    is OcrEngine.StreamToken.Done -> currentPageText = token.fullText
+                                    else -> {}
+                                }
+
+                                if (nowMs - lastUiUpdate > 100 || isDone) {
+                                    lastUiUpdate = nowMs
+                                    withContext(Dispatchers.Main) {
+                                        chatAdapter.updateBotMessage(msgId) {
+                                            when (token) {
+                                                is OcrEngine.StreamToken.Thinking -> {
+                                                    it.state = ChatMessage.BotState.THINKING
+                                                }
+                                                is OcrEngine.StreamToken.Text -> {
+                                                    it.state = ChatMessage.BotState.STREAMING
+                                                    it.streamedText = accumulatedPreviousPagesText + currentPageText
+                                                }
+                                                is OcrEngine.StreamToken.Error -> {
+                                                    it.state = ChatMessage.BotState.ERROR
+                                                    it.errorMessage = token.message
+                                                }
+                                                is OcrEngine.StreamToken.Done -> {
+                                                    accumulatedPreviousPagesText += currentPageText + "\n\n"
+                                                    it.streamedText = accumulatedPreviousPagesText.trim()
+                                                    currentTokPerSec = token.tokPerSec
+                                                    it.pagesContent.add(currentPageText)
+                                                }
                                             }
-                                            is OcrEngine.StreamToken.Error -> {
-                                                it.streamedText = accumulatedText + "\n\n[Page Error: ${token.message}]\n\n"
-                                            }
-                                            is OcrEngine.StreamToken.Done -> {
-                                                accumulatedText += token.fullText + "\n\n"
-                                                it.streamedText = accumulatedText
-                                                currentTokPerSec = token.tokPerSec
-                                            }
-                                            else -> {}
+                                            it.elapsedSeconds = nowSec
                                         }
-                                        it.elapsedSeconds = nowSec
+                                        binding.chatRecyclerView.smoothScrollToPosition(chatAdapter.itemCount - 1)
                                     }
-                                    binding.chatRecyclerView.scrollToPosition(chatAdapter.itemCount - 1)
                                 }
                             }
                     } catch (e: Exception) {
                         bitmap.recycle()
                         if (e is CancellationException) throw e
-                        accumulatedText += "\n\n[Page ${i+1} Failed: ${e.message}]\n\n"
+                        val errorStr = "\n\n[Page ${i+1} Failed: ${e.message}]\n\n"
+                        currentPageText += errorStr
+                        accumulatedPreviousPagesText += errorStr
+                        withContext(Dispatchers.Main) {
+                            chatAdapter.updateBotMessage(msgId) {
+                                it.pagesContent.add(errorStr)
+                            }
+                        }
                     }
+                }
+            } finally {
+                renderJob.cancel()
+                while (true) {
+                    val residual = channel.tryReceive().getOrNull() ?: break
+                    residual.second.recycle()
                 }
             }
 
             withContext(Dispatchers.Main) {
                 chatAdapter.updateBotMessage(msgId) {
                     it.state = ChatMessage.BotState.DONE
-                    it.streamedText = accumulatedText.trim()
+                    it.streamedText = accumulatedPreviousPagesText.trim()
                     it.tokPerSec = currentTokPerSec
                     it.elapsedSeconds = ((System.currentTimeMillis() - startMs) / 1000).toInt()
                 }
             }
 
+            try { renderer.close() } catch (_: Exception) {}
+
         } finally {
-            renderer.close()
+            try { fd.close() } catch (_: Exception) {}
         }
     }
 
@@ -905,16 +1056,24 @@ class MainActivity : AppCompatActivity() {
         return memInfo.availMem / (1024 * 1024)
     }
 
-    private fun calculateSafeScale(pageWidth: Int, pageHeight: Int, availableMemMb: Long): Float {
+    private fun calculateSafeScale(pageWidth: Int, pageHeight: Int, availableMemMb: Long, maxDim: Int = Int.MAX_VALUE): Float {
         val desiredScale = when {
-            availableMemMb < 128 -> 0.75f
-            availableMemMb < 256 -> 1.0f
-            availableMemMb < 512 -> 1.5f
+            availableMemMb < 512 -> 0.75f
+            availableMemMb < 1024 -> 1.0f
+            availableMemMb < 2048 -> 1.5f
             else -> 2.0f
         }
         val maxPixels = 50L * 1024L * 1024L / 4L
-        val maxScale = Math.sqrt(maxPixels.toDouble() / (pageWidth.toLong() * pageHeight)).toFloat()
-        return minOf(desiredScale, maxScale).coerceAtLeast(0.5f)
+        val memoryMaxScale = Math.sqrt(maxPixels.toDouble() / (pageWidth.toLong() * pageHeight)).toFloat()
+        var finalScale = minOf(desiredScale, memoryMaxScale).coerceAtLeast(0.5f)
+        
+        if (maxDim != Int.MAX_VALUE) {
+            val currentMaxDim = maxOf(pageWidth, pageHeight) * finalScale
+            if (currentMaxDim > maxDim) {
+                finalScale = maxDim.toFloat() / maxOf(pageWidth, pageHeight)
+            }
+        }
+        return finalScale
     }
 
     private fun getFileSizeMb(uri: Uri): Float {
@@ -972,7 +1131,7 @@ class MainActivity : AppCompatActivity() {
         }
         Toast.makeText(this, getString(R.string.status_benchmark_running), Toast.LENGTH_SHORT).show()
         lifecycleScope.launch {
-            val bitmap = Bitmap.createBitmap(224, 224, Bitmap.Config.RGB_565)
+            val bitmap = Bitmap.createBitmap(224, 224, Bitmap.Config.ARGB_8888)
             try {
                 var sec: Double? = null
                 ocrEngine.processImageStreaming(bitmap, 1536)
@@ -990,6 +1149,7 @@ class MainActivity : AppCompatActivity() {
         processingJob?.cancel()
         engineLoadingJob?.cancel()
         downloadJob?.cancel()
+        stopProcessingService()
         if (isFinishing) {
             llamaServerManager.stopServer()
         }

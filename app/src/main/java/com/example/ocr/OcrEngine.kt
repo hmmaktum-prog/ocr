@@ -3,6 +3,10 @@ package com.example.ocr
 import android.graphics.Bitmap
 import android.util.Log
 import android.util.Base64
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import okhttp3.MediaType.Companion.toMediaType
@@ -39,15 +43,39 @@ class OcrEngine {
         data class Error(val message: String) : StreamToken()
     }
 
-    private fun downscaleForOcr(bitmap: Bitmap, maxDimension: Int): Bitmap {
+    private fun prepareImageForOcr(bitmap: Bitmap, maxDimension: Int): Bitmap {
         val width = bitmap.width
         val height = bitmap.height
-        if (width <= maxDimension && height <= maxDimension) return bitmap
 
-        val scale = maxDimension.toFloat() / maxOf(width, height)
-        val newWidth = (width * scale).toInt()
-        val newHeight = (height * scale).toInt()
-        return Bitmap.createScaledBitmap(bitmap, newWidth, newHeight, true)
+        val scale = if (width > maxDimension || height > maxDimension) {
+            maxDimension.toFloat() / maxOf(width, height)
+        } else {
+            1.0f
+        }
+
+        val newWidth = (width * scale).toInt().coerceAtLeast(1)
+        val newHeight = (height * scale).toInt().coerceAtLeast(1)
+
+        val dest = Bitmap.createBitmap(newWidth, newHeight, Bitmap.Config.ARGB_8888)
+        val canvas = android.graphics.Canvas(dest)
+
+        val contrast = 1.3f
+        val brightness = -10f
+        val colorMatrix = android.graphics.ColorMatrix(floatArrayOf(
+            contrast, 0f, 0f, 0f, brightness,
+            0f, contrast, 0f, 0f, brightness,
+            0f, 0f, contrast, 0f, brightness,
+            0f, 0f, 0f, 1f, 0f
+        ))
+
+        val paint = android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG)
+        paint.colorFilter = android.graphics.ColorMatrixColorFilter(colorMatrix)
+
+        val matrix = android.graphics.Matrix()
+        matrix.setScale(scale, scale)
+
+        canvas.drawBitmap(bitmap, matrix, paint)
+        return dest
     }
 
     private fun buildChatRequestBody(base64Image: String, stream: Boolean): JSONObject {
@@ -85,15 +113,20 @@ class OcrEngine {
         }
     }
 
+    // Fix HIGH-03 & MEDIUM-11: Simplified retry with coroutine-cancellable OkHttp calls
     suspend fun processImage(bitmap: Bitmap): Result<OcrResult> {
-        var resized: Bitmap? = null
+        var prepared: Bitmap? = null
         return try {
-            resized = downscaleForOcr(bitmap, 1536)
+            prepared = prepareImageForOcr(bitmap, 1536)
+            // Fix MEDIUM-12: Use toByteArray to avoid extra String copy
             val outputStream = ByteArrayOutputStream()
             val base64Out = android.util.Base64OutputStream(outputStream, Base64.NO_WRAP)
-            resized.compress(Bitmap.CompressFormat.JPEG, 90, base64Out)
+            val pixels = prepared.width * prepared.height
+            val quality = if (pixels > 2_000_000) 80 else 85
+            prepared.compress(Bitmap.CompressFormat.JPEG, quality, base64Out)
             base64Out.close()
-            val base64Image = outputStream.toString("UTF-8")
+            val base64Bytes = outputStream.toByteArray()
+            val base64Image = String(base64Bytes, Charsets.US_ASCII)
 
             val jsonBody = buildChatRequestBody(base64Image, stream = false)
 
@@ -104,14 +137,17 @@ class OcrEngine {
                 .build()
 
             var responseBody = ""
-            var attempt = 0
-            while (attempt <= 2) {
+            for (attempt in 0 until MAX_RETRIES) {
                 try {
-                    HttpClientProvider.ocrClient.newCall(request).execute().use { response ->
+                    val call = HttpClientProvider.ocrClient.newCall(request)
+                    // Cancel HTTP call when coroutine is cancelled
+                    currentCoroutineContext()[Job]?.invokeOnCompletion {
+                        if (it is CancellationException) call.cancel()
+                    }
+                    call.execute().use { response ->
                         if (!response.isSuccessful) {
-                            if (response.code in listOf(429, 503) && attempt < 2) {
-                                attempt++
-                                kotlinx.coroutines.delay(1000L * attempt)
+                            if (response.code in listOf(429, 503) && attempt < MAX_RETRIES - 1) {
+                                delay(1000L * (attempt + 1))
                                 return@use
                             }
                             throw IOException("Server returned HTTP ${response.code}: ${response.message}")
@@ -119,18 +155,18 @@ class OcrEngine {
                         responseBody = response.body?.source()?.readUtf8(5_000_000) ?: ""
                     }
                     if (responseBody.isNotEmpty()) break
-                    attempt++
-                    if (attempt > 2) throw IOException("Server returned empty response after 3 attempts")
-                    kotlinx.coroutines.delay(1000L * attempt)
+                    if (attempt >= MAX_RETRIES - 1) throw IOException("Server returned empty response after $MAX_RETRIES attempts")
+                    delay(1000L * (attempt + 1))
+                } catch (e: CancellationException) {
+                    throw e
                 } catch (e: Exception) {
-                    val isRetryable = attempt < 2 && (
+                    val isRetryable = attempt < MAX_RETRIES - 1 && (
                         e is java.net.SocketTimeoutException ||
                         e.message?.contains("503") == true ||
                         e.message?.contains("429") == true
                     )
                     if (isRetryable) {
-                        attempt++
-                        kotlinx.coroutines.delay(1000L * attempt)
+                        delay(1000L * (attempt + 1))
                     } else throw e
                 }
             }
@@ -167,25 +203,30 @@ class OcrEngine {
 
             Result.success(OcrResult(text = content.trim(), tokensPerSecond = tokPerSec))
         } catch (e: Exception) {
+            if (e is CancellationException) throw e
             Log.e(TAG, "processImage failed", e)
             Result.failure(e)
         } finally {
-            if (resized != null && resized != bitmap) {
-                resized.recycle()
+            if (prepared != null && prepared != bitmap) {
+                prepared.recycle()
             }
         }
     }
 
+    // Fix MEDIUM-09: SSE streaming with coroutine cancellation support
     fun processImageStreaming(bitmap: Bitmap, maxDimension: Int = 1536): Flow<StreamToken> = flow {
         emit(StreamToken.Thinking(0))
-        var resized: Bitmap? = null
+        var prepared: Bitmap? = null
         try {
-            resized = downscaleForOcr(bitmap, maxDimension)
+            prepared = prepareImageForOcr(bitmap, maxDimension)
             val outputStream = ByteArrayOutputStream()
             val base64Out = android.util.Base64OutputStream(outputStream, Base64.NO_WRAP)
-            resized.compress(Bitmap.CompressFormat.JPEG, 90, base64Out)
+            val pixels = prepared.width * prepared.height
+            val quality = if (pixels > 2_000_000) 80 else 85
+            prepared.compress(Bitmap.CompressFormat.JPEG, quality, base64Out)
             base64Out.close()
-            val base64Image = outputStream.toString("UTF-8")
+            val base64Bytes = outputStream.toByteArray()
+            val base64Image = String(base64Bytes, Charsets.US_ASCII)
 
             val jsonBody = buildChatRequestBody(base64Image, stream = true)
 
@@ -196,7 +237,13 @@ class OcrEngine {
                 .addHeader("Accept", "text/event-stream")
                 .build()
 
-            HttpClientProvider.ocrClient.newCall(request).execute().use { response ->
+            val call = HttpClientProvider.ocrClient.newCall(request)
+            // Fix MEDIUM-09: Cancel HTTP call when coroutine is cancelled
+            currentCoroutineContext()[Job]?.invokeOnCompletion {
+                if (it is CancellationException) call.cancel()
+            }
+
+            call.execute().use { response ->
                 if (!response.isSuccessful) {
                     emit(StreamToken.Error("Server returned HTTP ${response.code}"))
                     return@use
@@ -227,6 +274,14 @@ class OcrEngine {
                             // Chat completions streaming: choices[0].delta.content
                             val choices = json.optJSONArray("choices")
                             val delta = choices?.optJSONObject(0)?.optJSONObject("delta")
+                            
+                            // Handling typical DeepSeek reasoning_content
+                            val reasoningContent = delta?.optString("reasoning_content", "") ?: ""
+                            if (reasoningContent.isNotEmpty()) {
+                                fullText.append(reasoningContent)
+                                emit(StreamToken.Text(reasoningContent))
+                            }
+                            
                             val content = delta?.optString("content", "") ?: ""
                             if (content.isNotEmpty()) {
                                 fullText.append(content)
@@ -248,12 +303,12 @@ class OcrEngine {
                 emit(StreamToken.Done(fullText.toString().trim(), tokensPerSecond))
             }
         } catch (e: Exception) {
-            if (e is kotlinx.coroutines.CancellationException) throw e
+            if (e is CancellationException) throw e
             Log.e(TAG, "Streaming OCR failed", e)
             emit(StreamToken.Error(e.message ?: "Unknown error"))
         } finally {
-            if (resized != null && resized != bitmap) {
-                resized.recycle()
+            if (prepared != null && prepared != bitmap) {
+                prepared.recycle()
             }
         }
     }
@@ -299,18 +354,21 @@ class OcrEngine {
         }
     }
 
+    // Fix MEDIUM-13: Support emoji/supplementary characters via XML numeric references
     private fun escapeXml(text: String): String {
         val out = StringBuilder(text.length)
-        // Fix LOGIC-15: Use index-based loop to handle surrogate pairs (emoji etc.)
-        // Surrogate pairs (U+D800–U+DFFF) are illegal in XML 1.0 — skip them
         var i = 0
         while (i < text.length) {
             val c = text[i]
             when {
-                // Skip high+low surrogate pairs entirely
+                // Handle surrogate pairs — encode as XML numeric character reference
                 c.isHighSurrogate() -> {
-                    if (i + 1 < text.length && text[i + 1].isLowSurrogate()) i++ // skip low too
-                    // Do not append — surrogate codepoints are illegal in XML 1.0
+                    if (i + 1 < text.length && text[i + 1].isLowSurrogate()) {
+                        val codePoint = Character.toCodePoint(c, text[i + 1])
+                        out.append("&#x${Integer.toHexString(codePoint)};")
+                        i++ // skip low surrogate
+                    }
+                    // Lone high surrogate — skip (truly illegal in XML)
                 }
                 c == '&'  -> out.append("&amp;")
                 c == '<'  -> out.append("&lt;")
@@ -363,6 +421,32 @@ class OcrEngine {
       <w:szCs w:val="32"/>
     </w:rPr>
   </w:style>
+  <w:style w:type="paragraph" w:styleId="Heading2">
+    <w:name w:val="heading 2"/>
+    <w:basedOn w:val="Normal"/>
+    <w:next w:val="Normal"/>
+    <w:pPr>
+      <w:spacing w:before="200" w:after="100"/>
+    </w:pPr>
+    <w:rPr>
+      <w:b/>
+      <w:sz w:val="28"/>
+      <w:szCs w:val="28"/>
+    </w:rPr>
+  </w:style>
+  <w:style w:type="paragraph" w:styleId="Heading3">
+    <w:name w:val="heading 3"/>
+    <w:basedOn w:val="Normal"/>
+    <w:next w:val="Normal"/>
+    <w:pPr>
+      <w:spacing w:before="160" w:after="80"/>
+    </w:pPr>
+    <w:rPr>
+      <w:b/>
+      <w:sz w:val="24"/>
+      <w:szCs w:val="24"/>
+    </w:rPr>
+  </w:style>
   <w:style w:type="paragraph" w:default="1" w:styleId="Normal">
     <w:name w:val="Normal"/>
     <w:rPr>
@@ -371,6 +455,54 @@ class OcrEngine {
     </w:rPr>
   </w:style>
 </w:styles>"""
+
+    private fun parseMarkdownLineToDocxRuns(line: String): String {
+        val runs = StringBuilder()
+        var i = 0
+        while (i < line.length) {
+            when {
+                line.startsWith("**", i) -> {
+                    val end = line.indexOf("**", i + 2)
+                    if (end != -1 && end > i + 2) {
+                        runs.append("<w:r><w:rPr><w:b/></w:rPr><w:t xml:space=\"preserve\">${escapeXml(line.substring(i + 2, end))}</w:t></w:r>")
+                        i = end + 2
+                    } else {
+                        runs.append("<w:r><w:t xml:space=\"preserve\">*</w:t></w:r>")
+                        i++
+                    }
+                }
+                line.startsWith("*", i) && (i == 0 || line[i - 1].isWhitespace()) -> {
+                    val end = line.indexOf("*", i + 1)
+                    if (end != -1 && end > i + 1) {
+                        runs.append("<w:r><w:rPr><w:i/></w:rPr><w:t xml:space=\"preserve\">${escapeXml(line.substring(i + 1, end))}</w:t></w:r>")
+                        i = end + 1
+                    } else {
+                        runs.append("<w:r><w:t xml:space=\"preserve\">*</w:t></w:r>")
+                        i++
+                    }
+                }
+                else -> {
+                    val nextBold = line.indexOf("**", i)
+                    val nextItalic = line.indexOf("*", i)
+
+                    val candidates = mutableListOf<Int>()
+                    if (nextBold != -1) candidates.add(nextBold)
+                    if (nextItalic != -1 && (nextItalic == 0 || line[nextItalic - 1].isWhitespace())) candidates.add(nextItalic)
+
+                    val nextTokenIndex = if (candidates.isEmpty()) line.length else candidates.minOrNull()!!
+                    
+                    if (nextTokenIndex > i) {
+                        runs.append("<w:r><w:t xml:space=\"preserve\">${escapeXml(line.substring(i, nextTokenIndex))}</w:t></w:r>")
+                        i = nextTokenIndex
+                    } else {
+                        runs.append("<w:r><w:t xml:space=\"preserve\">${escapeXml(line[i].toString())}</w:t></w:r>")
+                        i++
+                    }
+                }
+            }
+        }
+        return runs.toString()
+    }
 
     private fun documentXml(texts: Array<String>, pagePrefix: String): String {
         // Estimate initial capacity to avoid multiple buffer resizes
@@ -381,10 +513,22 @@ class OcrEngine {
   <w:body>
 """)
         texts.forEachIndexed { index, text ->
-            sb.append("""    <w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr><w:r><w:rPr><w:b/></w:rPr><w:t>$pagePrefix ${index + 1}</w:t></w:r></w:p>
+            if (texts.size > 1) {
+                sb.append("""    <w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr><w:r><w:rPr><w:b/></w:rPr><w:t>$pagePrefix ${index + 1}</w:t></w:r></w:p>
 """)
+            }
             text.lines().forEach { line ->
-                sb.append("    <w:p><w:r><w:t xml:space=\"preserve\">${escapeXml(line)}</w:t></w:r></w:p>\n")
+                if (line.trim().isEmpty()) {
+                    sb.append("    <w:p/>\n")
+                } else if (line.startsWith("### ")) {
+                    sb.append("    <w:p><w:pPr><w:pStyle w:val=\"Heading3\"/></w:pPr>${parseMarkdownLineToDocxRuns(line.substring(4))}</w:p>\n")
+                } else if (line.startsWith("## ")) {
+                    sb.append("    <w:p><w:pPr><w:pStyle w:val=\"Heading2\"/></w:pPr>${parseMarkdownLineToDocxRuns(line.substring(3))}</w:p>\n")
+                } else if (line.startsWith("# ")) {
+                    sb.append("    <w:p><w:pPr><w:pStyle w:val=\"Heading1\"/></w:pPr>${parseMarkdownLineToDocxRuns(line.substring(2))}</w:p>\n")
+                } else {
+                    sb.append("    <w:p>${parseMarkdownLineToDocxRuns(line)}</w:p>\n")
+                }
             }
             if (index < texts.size - 1) {
                 sb.append("    <w:p><w:r><w:br w:type=\"page\"/></w:r></w:p>\n")

@@ -1,6 +1,5 @@
 package com.example.ocr
 
-import android.graphics.Bitmap
 import java.util.UUID
 
 data class ChatMessage(
@@ -22,7 +21,8 @@ data class ChatMessage(
     var elapsedSeconds: Int = 0,
     var tokPerSec: Double? = null,
     var errorMessage: String? = null,
-    var isMarkdownEnabled: Boolean = true
+    var isMarkdownEnabled: Boolean = true,
+    var pagesContent: MutableList<String> = mutableListOf()
 ) {
     enum class Type { USER, BOT }
     enum class BotState { THINKING, STREAMING, DONE, ERROR }

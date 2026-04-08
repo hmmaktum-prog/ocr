@@ -3,15 +3,27 @@
     <color name="ic_launcher_background">#1A0033</color>
     <color name="splash_background">#1A0033</color>
 
-    <color name="colorPrimary">#5D5FEF</color>
+    <!-- Deep vibrant Indigo -->
+    <color name="colorPrimary">#4338CA</color> 
     <color name="colorOnPrimary">#FFFFFF</color>
-    <color name="colorPrimaryContainer">#E0E0FF</color>
-    <color name="colorOnPrimaryContainer">#1A1A5C</color>
-    <color name="colorSecondary">#E6E6FA</color>
-    <color name="colorOnSecondary">#1A1A6B</color>
+    <color name="colorPrimaryContainer">#EEF2FF</color>
+    <color name="colorOnPrimaryContainer">#312E81</color>
     
-    <color name="colorSecondaryContainer">#F3F3FA</color>
-    <color name="colorOnSecondaryContainer">#1E1E1E</color>
+    <!-- Ultra clean surface for bot bubbles -->
+    <color name="colorSecondary">#FFFFFF</color>
+    <color name="colorOnSecondary">#0F172A</color>
+    <!-- Soft background for user bubbles -->
+    <color name="colorSecondaryContainer">#F8FAFC</color>
+    <color name="colorOnSecondaryContainer">#1E293B</color>
+
+    <color name="colorSurfaceVariant">#FFFFFF</color>
+    <color name="colorOnSurfaceVariant">#475569</color>
     
-    <color name="colorError">#B3261E</color>
+    <!-- Border colors for elevated look -->
+    <color name="colorOutline">#E2E8F0</color>
+    <color name="colorError">#DC2626</color>
+    
+    <!-- Gradients -->
+    <color name="gradient_start">#6366F1</color>
+    <color name="gradient_end">#4338CA</color>
 </resources>

@@ -5,25 +5,59 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:fitsSystemWindows="true">
+    android:fitsSystemWindows="true"
+    android:background="?attr/colorSurfaceVariant">
 
     <com.google.android.material.appbar.AppBarLayout
         android:id="@+id/appBarLayout"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content">
+        android:layout_height="wrap_content"
+        android:background="@android:color/transparent"
+        app:elevation="0dp">
+
         <com.google.android.material.appbar.MaterialToolbar
             android:id="@+id/topAppBar"
-            style="@style/Widget.Material3.Toolbar.Surface"
             android:layout_width="match_parent"
             android:layout_height="?attr/actionBarSize"
             app:title="@string/app_name"
-            app:subtitle="Ready" />
+            app:titleCentered="true"
+            app:titleTextAppearance="?attr/textAppearanceHeadlineSmall"
+            app:subtitle="Ready"
+            app:subtitleCentered="true">
+
+            <com.google.android.material.card.MaterialCardView
+                android:id="@+id/ramCard"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="end|center_vertical"
+                android:layout_marginEnd="16dp"
+                app:cardBackgroundColor="?attr/colorSecondary"
+                app:cardCornerRadius="12dp"
+                app:strokeWidth="1dp"
+                app:strokeColor="?attr/colorOutline"
+                app:cardElevation="0dp">
+                <TextView
+                    android:id="@+id/ramUsageText"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:paddingHorizontal="10dp"
+                    android:paddingVertical="4dp"
+                    android:text="RAM: -- MB"
+                    android:textColor="?attr/colorOnSecondary"
+                    android:textSize="11sp"
+                    android:textStyle="bold" />
+            </com.google.android.material.card.MaterialCardView>
+            
+        </com.google.android.material.appbar.MaterialToolbar>
+
         <com.google.android.material.progressindicator.LinearProgressIndicator
             android:id="@+id/mainProgressIndicator"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:visibility="gone"
-            app:indicatorColor="?attr/colorPrimary" />
+            app:indicatorColor="?attr/colorPrimary"
+            app:trackColor="?attr/colorPrimaryContainer"
+            app:trackCornerRadius="4dp" />
     </com.google.android.material.appbar.AppBarLayout>
 
     <androidx.recyclerview.widget.RecyclerView
@@ -31,8 +65,9 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:clipToPadding="false"
-        android:paddingTop="16dp"
-        android:paddingBottom="100dp"
+        android:paddingTop="8dp"
+        android:paddingBottom="120dp"
+        app:layoutAnimation="@anim/layout_animation_slide_up"
         app:layout_behavior="@string/appbar_scrolling_view_behavior" />
 
     <LinearLayout
@@ -42,83 +77,120 @@
         android:layout_gravity="center"
         android:gravity="center"
         android:orientation="vertical"
-        android:padding="32dp"
+        android:padding="40dp"
         android:visibility="gone">
 
-        <ImageView
-            android:layout_width="120dp"
-            android:layout_height="120dp"
-            android:src="@drawable/splash_icon"
-            android:alpha="0.2"
-            android:layout_marginBottom="24dp"
-            app:tint="?attr/colorOnSurface"/>
+        <com.google.android.material.card.MaterialCardView
+            android:layout_width="140dp"
+            android:layout_height="140dp"
+            app:cardCornerRadius="70dp"
+            app:cardBackgroundColor="?attr/colorPrimaryContainer"
+            app:cardElevation="0dp"
+            app:strokeWidth="0dp"
+            android:layout_marginBottom="32dp">
+            
+            <ImageView
+                android:layout_width="80dp"
+                android:layout_height="80dp"
+                android:layout_gravity="center"
+                android:src="@drawable/splash_icon"
+                app:tint="?attr/colorPrimary"
+                android:contentDescription="@string/cd_app_logo"/>
+        </com.google.android.material.card.MaterialCardView>
 
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="OCR Scanner"
-            android:textAppearance="?attr/textAppearanceHeadlineMedium"
-            android:layout_marginBottom="8dp"/>
+            android:text="@string/empty_state_title"
+            android:textColor="?attr/colorPrimary"
+            android:textStyle="bold"
+            android:textSize="24sp"
+            android:letterSpacing="-0.02"
+            android:layout_marginBottom="12dp"/>
 
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="To get started, tap the + below to add an image or PDF."
+            android:text="@string/empty_state_subtitle"
             android:textAlignment="center"
-            android:textAppearance="?attr/textAppearanceBodyMedium"
+            android:textSize="16sp"
             android:textColor="?attr/colorOnSurfaceVariant"/>
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/downloadModelButton"
+            style="@style/Widget.Material3.Button"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="24dp"
+            android:layout_marginTop="32dp"
             android:text="@string/btn_download_model"
+            app:cornerRadius="16dp"
+            android:paddingHorizontal="32dp"
             android:visibility="gone" />
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/startEngineButton"
+            style="@style/Widget.Material3.Button"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="24dp"
+            android:layout_marginTop="32dp"
             android:text="@string/btn_initialize_engine"
+            app:cornerRadius="16dp"
+            android:paddingHorizontal="32dp"
             android:visibility="gone" />
 
     </LinearLayout>
 
-    <!-- Bottom Command Bar -->
+    <!-- Bottom Command Bar (Floating Pill) -->
     <com.google.android.material.card.MaterialCardView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_gravity="bottom"
-        android:layout_margin="16dp"
-        app:cardCornerRadius="28dp"
-        app:cardElevation="2dp"
-        style="@style/Widget.Material3.CardView.Elevated">
+        android:layout_marginHorizontal="20dp"
+        android:layout_marginBottom="24dp"
+        app:cardBackgroundColor="?attr/colorSecondary"
+        app:strokeWidth="1dp"
+        app:strokeColor="?attr/colorOutline"
+        app:cardCornerRadius="36dp"
+        app:cardElevation="12dp">
 
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
             android:gravity="center_vertical"
-            android:padding="8dp">
+            android:paddingHorizontal="12dp"
+            android:paddingVertical="8dp">
 
-            <ImageButton
-                android:id="@+id/addFileButton"
+            <com.google.android.material.card.MaterialCardView
                 android:layout_width="48dp"
                 android:layout_height="48dp"
-                android:background="?attr/selectableItemBackgroundBorderless"
-                android:src="@drawable/ic_add_file"
-                android:scaleType="centerInside"
-                android:contentDescription="Add File" />
+                app:cardCornerRadius="24dp"
+                app:cardElevation="0dp"
+                app:cardBackgroundColor="?attr/colorPrimary">
+                
+                <ImageButton
+                    android:id="@+id/addFileButton"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:src="@drawable/ic_add_file"
+                    app:tint="?attr/colorOnPrimary"
+                    android:scaleType="centerInside"
+                    android:contentDescription="@string/btn_add_file" />
+            </com.google.android.material.card.MaterialCardView>
 
             <com.google.android.material.chip.Chip
                 android:id="@+id/qualityChip"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="Fast"
-                android:layout_marginStart="8dp"
+                android:layout_marginStart="12dp"
+                app:chipBackgroundColor="?attr/colorPrimaryContainer"
+                app:chipStrokeWidth="0dp"
+                app:iconStartPadding="8dp"
                 app:chipIcon="@drawable/ic_benchmark"
+                app:chipIconTint="?attr/colorOnPrimaryContainer"
+                android:textColor="?attr/colorOnPrimaryContainer"
                 app:chipIconSize="16dp" />
 
             <TextView
@@ -126,10 +198,10 @@
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:text="Select an image or PDF..."
+                android:text="@string/hint_select_file"
                 android:textAppearance="?attr/textAppearanceBodyLarge"
                 android:textColor="?attr/colorOnSurfaceVariant"
-                android:paddingStart="12dp" />
+                android:paddingStart="16dp" />
 
             <ImageButton
                 android:id="@+id/cancelButton"
@@ -137,6 +209,7 @@
                 android:layout_height="48dp"
                 android:background="?attr/selectableItemBackgroundBorderless"
                 android:src="@drawable/ic_cancel"
+                app:tint="?attr/colorOnSecondary"
                 android:scaleType="centerInside"
                 android:visibility="gone"
                 android:contentDescription="@string/btn_cancel" />

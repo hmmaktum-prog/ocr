@@ -5,104 +5,129 @@
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:orientation="horizontal"
-    android:padding="16dp"
-    android:gravity="start"
+    android:paddingHorizontal="20dp"
+    android:paddingVertical="12dp"
+    android:gravity="start|top"
     android:baselineAligned="false">
 
-    <ImageView
-        android:layout_width="32dp"
-        android:layout_height="32dp"
-        android:layout_marginEnd="12dp"
-        android:src="@drawable/splash_icon"
-        android:background="@drawable/bot_avatar_bg"
-        android:padding="4dp"
-        app:tint="?attr/colorPrimary" />
+    <com.google.android.material.card.MaterialCardView
+        android:layout_width="40dp"
+        android:layout_height="40dp"
+        android:layout_marginEnd="16dp"
+        app:cardCornerRadius="20dp"
+        app:cardElevation="2dp"
+        app:cardBackgroundColor="?attr/colorPrimaryContainer"
+        app:strokeWidth="1dp"
+        app:strokeColor="?attr/colorPrimary">
+        
+        <ImageView
+            android:layout_width="24dp"
+            android:layout_height="24dp"
+            android:layout_gravity="center"
+            android:src="@drawable/splash_icon"
+            app:tint="?attr/colorPrimary"
+            android:contentDescription="@string/cd_bot_avatar" />
+    </com.google.android.material.card.MaterialCardView>
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:layout_marginEnd="8dp">
+        android:layout_marginEnd="32dp">
 
-        <TextView
-            android:id="@+id/botMessageText"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:textColor="?attr/colorOnSurface"
-            android:textAppearance="?attr/textAppearanceBodyLarge"
-            tools:text="Analyzing image content..." />
-
-        <!-- Thinking Indicator -->
         <LinearLayout
-            android:id="@+id/thinkingIndicator"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:gravity="center_vertical"
-            android:layout_marginTop="4dp"
-            android:visibility="gone">
-            <com.google.android.material.progressindicator.CircularProgressIndicator
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:indeterminate="true"
-                app:indicatorSize="16dp"
-                app:trackThickness="2dp" />
+            android:background="@drawable/chat_bubble_bot"
+            android:elevation="2dp"
+            android:orientation="vertical"
+            android:padding="16dp">
+
             <TextView
+                android:id="@+id/botMessageText"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginStart="8dp"
-                android:text="Thinking..."
-                android:textAppearance="?attr/textAppearanceBodyMedium"
-                android:textColor="?attr/colorOnSurfaceVariant" />
+                android:textColor="?attr/colorOnSecondary"
+                android:textAppearance="?attr/textAppearanceBodyLarge"
+                android:lineSpacingExtra="4dp"
+                tools:text="Analyzing image content..." />
+
+            <!-- Thinking Indicator -->
+            <LinearLayout
+                android:id="@+id/thinkingIndicator"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:layout_marginTop="8dp"
+                android:visibility="gone">
+                <com.google.android.material.progressindicator.CircularProgressIndicator
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:indeterminate="true"
+                    app:indicatorSize="16dp"
+                    app:trackThickness="2dp"
+                    app:indicatorColor="?attr/colorPrimary"/>
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:text="@string/state_thinking"
+                    android:textStyle="italic"
+                    android:textAppearance="?attr/textAppearanceBodyMedium"
+                    android:textColor="?attr/colorOnSurfaceVariant" />
+            </LinearLayout>
         </LinearLayout>
-        
-        <TextView
-            android:id="@+id/timingText"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:textSize="12sp"
-            android:textColor="?attr/colorOnSurfaceVariant"
-            tools:text="⏱ 12s • 8.5 tok/s"
-            android:visibility="gone"/>
 
         <HorizontalScrollView
-            android:layout_width="wrap_content"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:scrollbars="none">
+            android:layout_marginTop="8dp"
+            android:scrollbars="none"
+            android:clipToPadding="false"
+            android:paddingStart="4dp">
+            
             <LinearLayout
                 android:id="@+id/actionButtonsContainer"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:orientation="horizontal"
-                android:layout_marginTop="8dp"
                 android:visibility="gone"
                 tools:visibility="visible">
 
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/btnCopy"
-                    style="@style/Widget.Material3.Button.OutlinedButton"
+                    style="@style/Widget.Material3.Button.TonalButton"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="Copy"
+                    android:text="@string/btn_copy"
                     app:icon="@drawable/ic_copy"
                     android:layout_marginEnd="8dp" />
 
                 <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btnMarkdown"
-                    style="@style/Widget.Material3.Button.OutlinedButton"
+                    android:id="@+id/btnShare"
+                    style="@style/Widget.Material3.Button.TonalButton"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="Raw"
+                    android:text="Share"
+                    app:icon="@drawable/ic_share"
+                    android:layout_marginEnd="8dp" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnMarkdown"
+                    style="@style/Widget.Material3.Button.TonalButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/btn_markdown_raw"
                     app:icon="@drawable/ic_document"
                     android:layout_marginEnd="8dp" />
 
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/btnSaveDocx"
-                    style="@style/Widget.Material3.Button.OutlinedButton"
+                    style="@style/Widget.Material3.Button.TonalButton"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="Export"
+                    android:text="@string/btn_save_docx"
                     app:icon="@drawable/ic_save" />
             </LinearLayout>
         </HorizontalScrollView>
@@ -112,9 +137,22 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
+            android:layout_marginStart="4dp"
             android:textColor="?attr/colorError"
+            android:textStyle="bold"
             android:visibility="gone"
             tools:text="Error: Could not parse." />
+
+        <TextView
+            android:id="@+id/timingText"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:layout_marginStart="4dp"
+            android:textSize="12sp"
+            android:textColor="?attr/colorOnSurfaceVariant"
+            tools:text="⏱ 12s • 8.5 tok/s"
+            android:visibility="gone"/>
 
     </LinearLayout>
 </LinearLayout>

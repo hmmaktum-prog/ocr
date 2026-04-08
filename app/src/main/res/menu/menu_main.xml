@@ -6,13 +6,18 @@
         android:id="@+id/action_benchmark"
         android:title="@string/menu_benchmark"
         android:icon="@drawable/ic_benchmark"
-        app:showAsAction="always" />
+        app:showAsAction="ifRoom" />
 
     <item
         android:id="@+id/action_device_info"
         android:title="@string/menu_device_info"
         android:icon="@drawable/ic_device_info"
-        app:showAsAction="always" />
+        app:showAsAction="ifRoom" />
+
+    <item
+        android:id="@+id/action_clear"
+        android:title="Clear Chat"
+        app:showAsAction="never" />
 
     <item
         android:id="@+id/action_toggle_theme"

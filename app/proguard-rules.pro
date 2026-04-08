@@ -8,8 +8,6 @@
 -dontwarn org.bouncycastle.**
 -dontwarn org.openjsse.**
 
-# Keep JSON model classes
--keep class org.json.** { *; }
 
 # Fix SEC-13: Only keep what is actually needed — not the entire package
 # Sealed class result variants must survive minification (used in when-expressions)

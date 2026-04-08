@@ -8,7 +8,7 @@ import okhttp3.ConnectionPool
 object HttpClientProvider {
     val client: OkHttpClient by lazy {
         OkHttpClient.Builder()
-            .connectionPool(ConnectionPool(1, 2, TimeUnit.MINUTES))
+            .connectionPool(ConnectionPool(2, 2, TimeUnit.MINUTES))
             .connectTimeout(30, TimeUnit.SECONDS)
             // Fix LOGIC-12: Kept at 5 minutes for large model downloads and slow network OCR
             .readTimeout(5, TimeUnit.MINUTES)

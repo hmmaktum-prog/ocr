@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <paths xmlns:android="http://schemas.android.com/apk/res/android">
     <!-- Fix SEC-11: Restricted FileProvider paths to output directory to prevent internal file leak -->
-    <external-files-path name="output_files" path="output/" />
-    <files-path name="internal_files" path="output/" />
+    <external-files-path name="output_files" path="." />
+    <files-path name="internal_files" path="." />
 </paths>

@@ -111,7 +111,7 @@
     <string name="device_info_cpu_freq_unknown">CPU সর্বোচ্চ গতি: অজানা</string>
     <string name="device_info_gpu_vulkan_yes">GPU ত্বরণ: Vulkan সমর্থিত</string>
     <string name="device_info_gpu_vulkan_no">GPU ত্বরণ: পাওয়া যায়নি (শুধু CPU)</string>
-    <string name="device_info_gpu_layers">GPU লেয়ার অফলোড: %1$d / ৩২</string>
+    <string name="device_info_gpu_layers">GPU লেয়ার অফলোড: %1$d / 32</string>
     <string name="device_info_ram_total">মোট RAM: %1$d MB</string>
     <string name="device_info_ram_available">বর্তমানে উপলব্ধ RAM: %1$d MB</string>
     <string name="device_info_ctx_size">কনটেক্সট সাইজ: %1$d টোকেন</string>
@@ -182,4 +182,25 @@
     <string name="mode_fast">⚡ দ্রুত</string>
     <string name="mode_hq">🔍 উচ্চ মান</string>
     <string name="state_thinking">ভাবছে…</string>
+
+    <!-- Missing Strings from Code and Layouts -->
+    <string name="cd_app_logo">অ্যাপ লোগো</string>
+    <string name="empty_state_title">ওসিআর স্ক্যানার</string>
+    <string name="empty_state_subtitle">শুরু করতে নিচের + আইকনে ট্যাপ করে একটি ছবি বা পিডিএফ যুক্ত করুন।</string>
+    <string name="btn_add_file">ফাইল যুক্ত করুন</string>
+    <string name="hint_select_file">একটি ছবি বা পিডিএফ নির্বাচন করুন…</string>
+    <string name="hint_processing">প্রসেস হচ্ছে…</string>
+    <string name="cd_bot_avatar">বট আভাটার</string>
+    <string name="cd_thumbnail">ডকুমেন্ট থাম্বনেইল</string>
+    <string name="btn_copy">কপি করুন</string>
+    <string name="btn_markdown_raw">র (Raw)</string>
+    <string name="btn_markdown_formatted">ফরমেটেড</string>
+    <string name="btn_save_docx">এক্সপোর্ট</string>
+    <string name="default_document_name">ডকুমেন্ট</string>
+    <string name="file_size_display">%1$s%2$.1f MB</string>
+    <string name="status_copied">ক্লিপবোর্ডে কপি করা হয়েছে</string>
+    <string name="timing_page_progress">পৃষ্ঠা %1$d/%2$d</string>
+    <string name="timing_elapsed">%1$s⏱ %2$d সেঃ</string>
+    <string name="timing_done">%1$s⏱ %2$d সেঃ%3$s</string>
+    <string name="error_prefix">ত্রুটি: %1$s</string>
 </resources>
