@@ -80,16 +80,51 @@ class MainActivity : AppCompatActivity() {
     private fun checkStartupState() {
         binding.progressBar.visibility = View.GONE
         if (modelsAlreadyDownloaded()) {
-            binding.statusText.text = getString(R.string.status_models_found)
+            // Models exist — check if server is already running (hybrid: survived from previous session)
+            binding.statusText.text = getString(R.string.status_checking_engine)
             binding.btnDownload.text = getString(R.string.btn_initialize_engine)
+
+            lifecycleScope.launch {
+                val alive = llamaServerManager.isServerAlive()
+                if (alive) {
+                    // Server already warm — no reload needed
+                    Log.i(TAG, "Hybrid: server already running, skipping load")
+                    isEngineReady = true
+                    binding.statusText.text = getString(R.string.status_engine_ready)
+                    binding.btnSelectFile.isEnabled = true
+                    binding.btnDownload.visibility = View.GONE
+                } else {
+                    binding.statusText.text = getString(R.string.status_models_found)
+                }
+            }
         } else {
             binding.statusText.text = getString(R.string.status_initializing)
-            
+
             // Fix USE-11: First-run onboarding screen
             val prefs = getSharedPreferences("app_prefs", MODE_PRIVATE)
             if (!prefs.getBoolean("onboarding_shown", false)) {
                 showOnboardingDialog()
                 prefs.edit().putBoolean("onboarding_shown", true).apply()
+            }
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // Hybrid approach: if engine was ready but the OS killed the server process
+        // while the app was in background, automatically re-initiate loading.
+        if (isEngineReady) {
+            lifecycleScope.launch {
+                val alive = llamaServerManager.isServerAlive()
+                if (!alive) {
+                    Log.w(TAG, "Hybrid: server died in background — reloading")
+                    isEngineReady = false
+                    binding.btnSelectFile.isEnabled = false
+                    binding.btnDownload.visibility = View.VISIBLE
+                    binding.statusText.text = getString(R.string.status_engine_reloading)
+                    initEngine()
+                }
+                // If alive, do nothing — user continues seamlessly
             }
         }
     }

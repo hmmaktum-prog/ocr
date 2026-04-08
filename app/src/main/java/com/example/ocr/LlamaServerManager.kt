@@ -310,5 +310,32 @@ class LlamaServerManager(private val context: Context) {
         val proc = getProcess() ?: return
         cleanupProcess(proc)
     }
-    // Fix LOGIC-08: isRunning() was dead code — removed
+
+    /**
+     * Hybrid approach: check whether the server is already running and healthy.
+     * Returns true only if the child process is alive AND /health returns {"status":"ok"}.
+     * Called on app resume to decide whether to skip re-loading the model.
+     */
+    suspend fun isServerAlive(): Boolean = withContext(Dispatchers.IO) {
+        // Process reference must exist and be alive
+        if (getProcess()?.isAlive != true) return@withContext false
+        var conn: HttpURLConnection? = null
+        try {
+            conn = URL("http://127.0.0.1:${SERVER_PORT}/health")
+                .openConnection() as HttpURLConnection
+            conn.requestMethod = "GET"
+            conn.connectTimeout = 2000
+            conn.readTimeout = 2000
+            if (conn.responseCode == 200) {
+                val body = conn.inputStream.bufferedReader().readText()
+                body.contains("\"ok\"")
+            } else {
+                false
+            }
+        } catch (_: Exception) {
+            false
+        } finally {
+            conn?.disconnect()
+        }
+    }
 }

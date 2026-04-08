@@ -10,8 +10,10 @@
     <string name="status_models_ready">Models ready. Starting engine…</string>
     <string name="status_models_found">Models found. Tap the button to start.</string>
     <string name="status_models_failed">Failed to download models. Check internet connection.</string>
+    <string name="status_checking_engine">Checking engine status…</string>
     <string name="status_engine_starting">Starting engine… Loading ~1.8GB model, may take several minutes.</string>
     <string name="status_engine_ready">Engine Ready. Please select a file.</string>
+    <string name="status_engine_reloading">Engine was stopped. Reloading…</string>
     <string name="status_engine_failed">Engine Initialization Failed.</string>
     <string name="status_engine_loading">Loading model… <xliff:g xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2" id="elapsed">%1$d</xliff:g>s elapsed (may take up to 5 min)</string>
     <string name="status_engine_loading_stage"><xliff:g xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2" id="stage">%1$s</xliff:g>\n<xliff:g xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2" id="elapsed">%2$d</xliff:g>s elapsed (up to 5 min)</string>
