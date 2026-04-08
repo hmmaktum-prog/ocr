@@ -12,7 +12,7 @@ on:
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
   LLAMA_CPP_TAG: b8683
-  BINARY_RELEASE_TAG: llama-android-arm64-b8683-static
+  BINARY_RELEASE_TAG: llama-android-arm64-b8683-vulkan-static
 
 jobs:
   build:
@@ -155,6 +155,7 @@ jobs:
             -DLLAMA_CURL=OFF \
             -DGGML_NATIVE=OFF \
             -DGGML_OPENMP=OFF \
+            -DGGML_VULKAN=ON \
             -DBUILD_SHARED_LIBS=OFF \
             -DCMAKE_BUILD_TYPE=Release
 
@@ -181,7 +182,7 @@ jobs:
           gh release create "$BINARY_RELEASE_TAG" \
             --repo "${{ github.repository }}" \
             --title "llama-server Android arm64 ($LLAMA_CPP_TAG) [static]" \
-            --notes "Pre-built statically linked llama-server binary for Android arm64-v8a (API 28+). Built from llama.cpp $LLAMA_CPP_TAG with BUILD_SHARED_LIBS=OFF (no external .so dependencies)." \
+            --notes "Pre-built statically linked llama-server binary for Android arm64-v8a (API 28+). Built from llama.cpp $LLAMA_CPP_TAG with BUILD_SHARED_LIBS=OFF and GGML_VULKAN=ON (Vulkan GPU offload support)." \
             --prerelease 2>/dev/null || true
 
           gh release upload "$BINARY_RELEASE_TAG" \

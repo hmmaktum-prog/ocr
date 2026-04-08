@@ -1,6 +1,7 @@
 package com.example.ocr
 
 import android.content.Context
+import android.content.pm.PackageManager
 import android.os.Build
 import android.util.Log
 import kotlinx.coroutines.Dispatchers
@@ -53,6 +54,58 @@ class LlamaServerManager(private val context: Context) {
      */
     interface LoadingProgressListener {
         fun onLoadingProgress(elapsedSeconds: Int, maxSeconds: Int, stageMessage: String)
+    }
+
+    /**
+     * Big core count detection — reads CPU max-frequency per core from sysfs.
+     * On big.LITTLE chips (Snapdragon, Dimensity) only big cores are counted.
+     * Using LITTLE cores for LLM inference is counter-productive — they're slow.
+     */
+    private fun detectBigCoreCount(): Int {
+        return try {
+            val cpuCount = Runtime.getRuntime().availableProcessors()
+            val freqs = (0 until cpuCount).mapNotNull { i ->
+                File("/sys/devices/system/cpu/cpu$i/cpufreq/cpuinfo_max_freq")
+                    .takeIf { it.exists() }
+                    ?.readText()?.trim()?.toLongOrNull()
+            }
+            if (freqs.isEmpty()) {
+                // Fallback: half of all cores, minimum 2
+                return (cpuCount / 2).coerceAtLeast(2)
+            }
+            val maxFreq = freqs.max()
+            // Count cores whose max freq is ≥ 90% of the highest — those are big cores
+            val bigCount = freqs.count { it >= maxFreq * 0.9 }
+            Log.i(TAG, "CPU: $cpuCount cores total, $bigCount big cores detected (max ${maxFreq / 1000}MHz)")
+            bigCount.coerceAtLeast(2)
+        } catch (e: Exception) {
+            Log.w(TAG, "Big core detection failed, using fallback", e)
+            (Runtime.getRuntime().availableProcessors() / 2).coerceAtLeast(2)
+        }
+    }
+
+    /**
+     * GPU layer count for Vulkan offload.
+     * Returns 0 if Vulkan is unavailable — all computation stays on CPU.
+     * PaddleOCR-VL-1.5 has 32 transformer layers total.
+     * We offload conservatively: leave some layers on CPU for memory safety.
+     */
+    private fun detectGpuLayers(totalRamMb: Long): Int {
+        val hasVulkan = context.packageManager.hasSystemFeature(PackageManager.FEATURE_VULKAN_HARDWARE_LEVEL) ||
+                        context.packageManager.hasSystemFeature(PackageManager.FEATURE_VULKAN_HARDWARE_VERSION)
+        if (!hasVulkan) {
+            Log.i(TAG, "GPU: Vulkan not available — CPU only")
+            return 0
+        }
+        // Vulkan available: offload layers based on available RAM
+        val layers = when {
+            totalRamMb < 4096 -> 0   // < 4GB RAM — too risky, avoid GPU OOM
+            totalRamMb < 6144 -> 10  // 4–6GB RAM — partial offload (10/32 layers)
+            totalRamMb < 8192 -> 20  // 6–8GB RAM — moderate offload (20/32 layers)
+            else              -> 28  // 8GB+ RAM  — near-full offload (28/32 layers)
+        }
+        Log.i(TAG, "GPU: Vulkan available, offloading $layers/32 layers (RAM: ${totalRamMb}MB)")
+        return layers
     }
 
     /** Detect current loading phase by scanning llama-server stdout */
@@ -152,30 +205,38 @@ class LlamaServerManager(private val context: Context) {
             // Step 4: পুরনো প্রসেস বন্ধ করো
             stopServer()
 
-            // Step 5: Device RAM অনুযায়ী context size নির্ধারণ করো
+            // Step 5: Device RAM ও CPU অনুযায়ী parameters নির্ধারণ করো
             val activityManager = context.getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager
             val memInfo = android.app.ActivityManager.MemoryInfo()
             activityManager.getMemoryInfo(memInfo)
             val totalRamMb = memInfo.totalMem / (1024 * 1024)
+
             val contextSize = when {
                 totalRamMb < 3072 -> 2048
                 totalRamMb < 6144 -> 4096
-                else -> 8192
+                else              -> 8192
             }
+            val cpuThreads   = detectBigCoreCount()
+            val gpuLayers    = detectGpuLayers(totalRamMb)
 
             // Step 6: নতুন প্রসেস শুরু করো
             val proc: Process
             try {
-                val cmd = listOf(
+                val cmd = mutableListOf(
                     serverFile.absolutePath,
-                    "-m", modelPath,
-                    "--mmproj", mmprojPath,
-                    "--port", SERVER_PORT.toString(),
-                    "-c", contextSize.toString(),
-                    "--host", "127.0.0.1",
+                    "-m",        modelPath,
+                    "--mmproj",  mmprojPath,
+                    "--port",    SERVER_PORT.toString(),
+                    "--host",    "127.0.0.1",
+                    "-c",        contextSize.toString(),
+                    "-t",        cpuThreads.toString(),
+                    "-tb",       Runtime.getRuntime().availableProcessors().toString(),
                     "-cb"
                 )
-                Log.i(TAG, "Starting llama-server on arm64 (device ABI: $primaryAbi, ctx: $contextSize)")
+                if (gpuLayers > 0) {
+                    cmd += listOf("-ngl", gpuLayers.toString())
+                }
+                Log.i(TAG, "Starting llama-server: ABI=$primaryAbi, ctx=$contextSize, threads=$cpuThreads, ngl=$gpuLayers")
 
                 val pb = ProcessBuilder(cmd)
                 pb.directory(context.filesDir)
