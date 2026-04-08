@@ -58,6 +58,7 @@ class MainActivity : AppCompatActivity() {
     private var processingJob: Job? = null
     private var engineLoadingJob: Job? = null
     private var downloadJob: Job? = null
+    private var ramUpdateJob: Job? = null
     private var lastOutputFile: File? = null
     private var lastExtractedText: String = ""
     private var isEngineReady: Boolean = false
@@ -136,6 +137,18 @@ class MainActivity : AppCompatActivity() {
                 }
                 R.id.action_device_info -> {
                     showDeviceInfoDialog()
+                    true
+                }
+                R.id.action_benchmark -> {
+                    runBenchmark()
+                    true
+                }
+                R.id.action_battery_saver -> {
+                    val newMode = !llamaServerManager.batterySaverMode
+                    llamaServerManager.batterySaverMode = newMode
+                    item.isChecked = newMode
+                    val msg = if (newMode) getString(R.string.battery_saver_on) else getString(R.string.battery_saver_off)
+                    Toast.makeText(this, msg, Toast.LENGTH_LONG).show()
                     true
                 }
                 else -> false
@@ -530,6 +543,23 @@ class MainActivity : AppCompatActivity() {
             sb.appendLine(getString(R.string.device_info_gpu_layers, report.gpuLayers))
         }
 
+        sb.appendLine()
+        sb.appendLine(getString(R.string.device_info_section_thermal))
+        if (report.cpuTemperatureC != null) {
+            val tempStr = if (report.cpuTemperatureC > 70f)
+                getString(R.string.device_info_cpu_temp_hot, report.cpuTemperatureC)
+            else
+                getString(R.string.device_info_cpu_temp, report.cpuTemperatureC)
+            sb.appendLine(tempStr)
+        } else {
+            sb.appendLine(getString(R.string.device_info_cpu_temp_unknown))
+        }
+        sb.appendLine()
+        sb.appendLine(
+            if (report.batterySaverMode) getString(R.string.device_info_battery_saver_on)
+            else getString(R.string.device_info_battery_saver_off)
+        )
+
         AlertDialog.Builder(this)
             .setTitle(getString(R.string.device_info_title))
             .setMessage(sb.toString().trimEnd())
@@ -608,11 +638,12 @@ class MainActivity : AppCompatActivity() {
             try {
                 val extractedTexts = mutableListOf<String>()
                 val failedPages = mutableListOf<Int>()
+                val tokPerSecList = mutableListOf<Double>()
 
                 if (isPdf) {
-                    processPdf(uri, extractedTexts, failedPages, processingStartMs)
+                    processPdf(uri, extractedTexts, failedPages, tokPerSecList, processingStartMs)
                 } else {
-                    processImage(uri, extractedTexts)
+                    processImage(uri, extractedTexts, tokPerSecList)
                 }
 
                 if (extractedTexts.isEmpty() || extractedTexts.all { it.isBlank() }) {
@@ -636,6 +667,7 @@ class MainActivity : AppCompatActivity() {
                 val result = ocrEngine.generateDocx(extractedTexts.toTypedArray(), outFile.absolutePath, getString(R.string.page_prefix))
 
                 val elapsedSec = ((System.currentTimeMillis() - processingStartMs) / 1000).toInt()
+                val avgTokPerSec = if (tokPerSecList.isNotEmpty()) tokPerSecList.average() else null
 
                 withContext(Dispatchers.Main) {
                     stopProcessingService()
@@ -647,7 +679,10 @@ class MainActivity : AppCompatActivity() {
                         binding.btnShare.visibility = View.VISIBLE
                         binding.btnSaveToDevice.visibility = View.VISIBLE
 
-                        val statusMsg = getString(R.string.status_saved_success_timed, outFile.name, elapsedSec)
+                        val tokStr = if (avgTokPerSec != null)
+                            "  •  " + getString(R.string.status_tok_per_sec, avgTokPerSec)
+                        else ""
+                        val statusMsg = getString(R.string.status_saved_success_timed, outFile.name, elapsedSec) + tokStr
                         binding.statusText.text = if (failedPages.isNotEmpty()) {
                             statusMsg + "\n" + getString(
                                 R.string.status_ocr_partial_fail,
@@ -684,7 +719,7 @@ class MainActivity : AppCompatActivity() {
         return file
     }
 
-    private suspend fun processPdf(uri: Uri, extractedTexts: MutableList<String>, failedPages: MutableList<Int>, startMs: Long = System.currentTimeMillis()) {
+    private suspend fun processPdf(uri: Uri, extractedTexts: MutableList<String>, failedPages: MutableList<Int>, tokPerSecList: MutableList<Double>, startMs: Long = System.currentTimeMillis()) {
         val fd = contentResolver.openFileDescriptor(uri, "r")
             ?: throw Exception("Cannot open file")
 
@@ -735,7 +770,10 @@ class MainActivity : AppCompatActivity() {
                     page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_PRINT)
 
                     val result = ocrEngine.processImage(bitmap)
-                    result.onSuccess { text -> extractedTexts.add(text) }
+                    result.onSuccess { ocrResult ->
+                        extractedTexts.add(ocrResult.text)
+                        ocrResult.tokensPerSecond?.let { tokPerSecList.add(it) }
+                    }
                     result.onFailure { e ->
                         Log.w(TAG, "OCR failed on page ${i + 1}", e)
                         failedPages.add(i + 1)
@@ -750,7 +788,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private suspend fun processImage(uri: Uri, extractedTexts: MutableList<String>) {
+    private suspend fun processImage(uri: Uri, extractedTexts: MutableList<String>, tokPerSecList: MutableList<Double> = mutableListOf()) {
         withContext(Dispatchers.Main) {
             setProgressIndeterminate(true)
             binding.statusText.text = getString(R.string.status_processing_image)
@@ -779,7 +817,10 @@ class MainActivity : AppCompatActivity() {
                 }
 
                 val result = ocrEngine.processImage(bitmap)
-                result.onSuccess { text -> extractedTexts.add(text) }
+                result.onSuccess { ocrResult ->
+                    extractedTexts.add(ocrResult.text)
+                    ocrResult.tokensPerSecond?.let { tokPerSecList.add(it) }
+                }
                 result.onFailure { e -> throw e }
             } finally {
                 // Fix LOGIC-01: Always recycle bitmap — even when OCR fails
@@ -842,10 +883,61 @@ class MainActivity : AppCompatActivity() {
         return minOf(desiredScale, maxScale).coerceAtLeast(0.5f)
     }
 
+    private fun startRamMonitor() {
+        ramUpdateJob?.cancel()
+        ramUpdateJob = lifecycleScope.launch {
+            val am = getSystemService(ACTIVITY_SERVICE) as ActivityManager
+            val mi = ActivityManager.MemoryInfo()
+            binding.ramProgressBar.visibility = View.VISIBLE
+            binding.ramText.visibility = View.VISIBLE
+            while (true) {
+                am.getMemoryInfo(mi)
+                val totalMb = mi.totalMem / (1024 * 1024)
+                val availMb = mi.availMem / (1024 * 1024)
+                val usedMb = totalMb - availMb
+                val percent = ((usedMb * 100L) / totalMb).toInt()
+                binding.ramProgressBar.progress = percent
+                binding.ramText.text = getString(R.string.ram_usage_text, percent, availMb.toInt())
+                kotlinx.coroutines.delay(1000L)
+            }
+        }
+    }
+
+    private fun stopRamMonitor() {
+        ramUpdateJob?.cancel()
+        ramUpdateJob = null
+        binding.ramProgressBar.visibility = View.GONE
+        binding.ramText.visibility = View.GONE
+    }
+
+    private fun runBenchmark() {
+        if (!isEngineReady) {
+            Toast.makeText(this, getString(R.string.benchmark_engine_not_ready), Toast.LENGTH_SHORT).show()
+            return
+        }
+        binding.statusText.text = getString(R.string.status_benchmark_running)
+        lifecycleScope.launch {
+            val bitmap = Bitmap.createBitmap(224, 224, Bitmap.Config.RGB_565)
+            val result = withContext(Dispatchers.IO) { ocrEngine.processImage(bitmap) }
+            bitmap.recycle()
+            result.onSuccess { ocrResult ->
+                binding.statusText.text = if (ocrResult.tokensPerSecond != null) {
+                    getString(R.string.status_benchmark_result, ocrResult.tokensPerSecond)
+                } else {
+                    getString(R.string.status_benchmark_no_timing)
+                }
+            }
+            result.onFailure {
+                binding.statusText.text = getString(R.string.status_benchmark_failed)
+            }
+        }
+    }
+
     // Fix UI-01: Only hide btnShare when processing STARTS, not when it ends
     // Fix UI-02: Reset fileInfoText visibility on processing start
     private fun setProcessingState(processing: Boolean) {
         binding.progressBar.visibility = if (processing) View.VISIBLE else View.GONE
+        if (processing) startRamMonitor() else stopRamMonitor()
 
         binding.btnSelectFile.isEnabled = !processing && isEngineReady
         if (processing) {
@@ -1002,7 +1094,8 @@ class MainActivity : AppCompatActivity() {
         super.onDestroy()
         processingJob?.cancel()
         engineLoadingJob?.cancel()
-        downloadJob?.cancel()  // Fix LOGIC-03: cancel download on destroy
+        downloadJob?.cancel()
+        ramUpdateJob?.cancel()
         if (isFinishing) {
             llamaServerManager.stopServer()
         }
