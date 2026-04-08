@@ -26,7 +26,13 @@ class OcrEngine {
         private val client = HttpClientProvider.client
     }
 
-    suspend fun processImage(bitmap: Bitmap): Result<String> {
+    /** Result of a single OCR inference call */
+    data class OcrResult(
+        val text: String,
+        val tokensPerSecond: Double?
+    )
+
+    suspend fun processImage(bitmap: Bitmap): Result<OcrResult> {
         return try {
             val outputStream = ByteArrayOutputStream()
             bitmap.compress(Bitmap.CompressFormat.JPEG, 80, outputStream)
@@ -101,7 +107,14 @@ class OcrEngine {
                 if (content.isEmpty()) {
                     Log.w(TAG, "Server returned empty content")
                 }
-                Result.success(content.trim())
+
+                // Extract tokens/second from llama-server timings
+                val tokPerSec = jsonResponse.optJSONObject("timings")
+                    ?.optDouble("predicted_per_second")
+                    ?.takeIf { it.isFinite() && it > 0.0 }
+                Log.d(TAG, "OCR complete: ${content.length} chars, tok/s=${tokPerSec ?: "N/A"}")
+
+                Result.success(OcrResult(text = content.trim(), tokensPerSecond = tokPerSec))
         } catch (e: Exception) {
             Log.e(TAG, "processImage failed", e)
             Result.failure(e)

@@ -44,6 +44,8 @@
     <string name="btn_save_to_device">Save to Device</string>
     <string name="menu_toggle_theme">Toggle Day/Night</string>
     <string name="menu_device_info">Device Info</string>
+    <string name="menu_battery_saver">Battery Saver</string>
+    <string name="menu_benchmark">Benchmark</string>
 
     <!-- Device Info Dialog -->
     <string name="device_info_title">Device &amp; Performance Info</string>
@@ -64,6 +66,31 @@
     <string name="device_info_section_gpu">── GPU ──</string>
     <string name="device_info_section_ram">── Memory ──</string>
     <string name="device_info_section_inference">── Inference Config ──</string>
+
+    <!-- Battery Saver -->
+    <string name="battery_saver_on">Battery Saver ON — engine will run CPU-only after next restart</string>
+    <string name="battery_saver_off">Battery Saver OFF — GPU acceleration restored after next restart</string>
+    <string name="battery_saver_needs_restart">Restart the engine for this setting to take effect</string>
+
+    <!-- Benchmark -->
+    <string name="benchmark_engine_not_ready">Please initialize the engine first</string>
+    <string name="status_benchmark_running">Running benchmark… please wait</string>
+    <string name="status_benchmark_result">Benchmark: %.1f tok/s</string>
+    <string name="status_benchmark_no_timing">Benchmark done (no timing data from server)</string>
+    <string name="status_benchmark_failed">Benchmark failed — check engine status</string>
+
+    <!-- Tok/s and RAM -->
+    <string name="status_tok_per_sec">%.1f tok/s avg</string>
+    <string name="ram_usage_text">RAM: %1$d%% used  (%2$d MB free)</string>
+
+    <!-- Extended Device Info: Thermal + Battery Saver -->
+    <string name="device_info_section_thermal">── Thermal ──</string>
+    <string name="device_info_cpu_temp">CPU Temperature: %1$.1f°C</string>
+    <string name="device_info_cpu_temp_hot">CPU Temperature: %1$.1f°C  ⚠ HOT</string>
+    <string name="device_info_cpu_temp_unknown">CPU Temperature: Unknown</string>
+    <string name="device_info_battery_saver_on">⚡ Battery Saver: ON (CPU-only, 2048 ctx)</string>
+    <string name="device_info_battery_saver_off">Battery Saver: OFF</string>
+    <string name="warning_cpu_hot">CPU is running hot (%1$.1f°C) — processing may be throttled</string>
 
     <!-- OCR Timing -->
     <string name="status_saved_success_timed">Saved: %1$s\nTime: %2$d sec</string>

@@ -77,7 +77,28 @@
                     android:progress="0"
                     android:indeterminate="true"
                     android:visibility="gone"
-                    android:layout_marginBottom="8dp" />
+                    android:layout_marginBottom="3dp" />
+
+                <com.google.android.material.progressindicator.LinearProgressIndicator
+                    android:id="@+id/ramProgressBar"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:max="100"
+                    android:progress="0"
+                    android:visibility="gone"
+                    app:indicatorColor="?attr/colorTertiary"
+                    android:layout_marginBottom="1dp" />
+
+                <TextView
+                    android:id="@+id/ramText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:textAlignment="center"
+                    android:textSize="10sp"
+                    android:textColor="?attr/colorOnPrimaryContainer"
+                    android:alpha="0.7"
+                    android:visibility="gone"
+                    android:layout_marginBottom="6dp" />
 
                 <TextView
                     android:id="@+id/fileInfoText"

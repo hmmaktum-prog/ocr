@@ -66,7 +66,29 @@
                     android:progress="0"
                     android:indeterminate="true"
                     android:visibility="gone"
-                    android:layout_marginBottom="16dp" />
+                    android:layout_marginBottom="6dp" />
+
+                <!-- RAM usage indicator — visible during OCR processing -->
+                <com.google.android.material.progressindicator.LinearProgressIndicator
+                    android:id="@+id/ramProgressBar"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:max="100"
+                    android:progress="0"
+                    android:visibility="gone"
+                    app:indicatorColor="?attr/colorTertiary"
+                    android:layout_marginBottom="2dp" />
+
+                <TextView
+                    android:id="@+id/ramText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:textAlignment="center"
+                    android:textSize="11sp"
+                    android:textColor="?attr/colorOnPrimaryContainer"
+                    android:alpha="0.7"
+                    android:visibility="gone"
+                    android:layout_marginBottom="10dp" />
 
                 <TextView
                     android:id="@+id/fileInfoText"

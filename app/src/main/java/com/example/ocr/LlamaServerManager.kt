@@ -44,11 +44,40 @@ class LlamaServerManager(private val context: Context) {
         val contextSize: Int,
         val primaryAbi: String,
         val androidVersion: String,
-        val deviceModel: String
+        val deviceModel: String,
+        val cpuTemperatureC: Float?,
+        val batterySaverMode: Boolean
     )
 
     /**
+     * Reads the highest thermal zone temperature from sysfs.
+     * Returns temperature in Celsius, or null if unavailable.
+     * Handles both millidegree (1000 = 1°C) and degree formats.
+     */
+    fun getCpuTemperatureCelsius(): Float? {
+        return try {
+            val thermalDir = File("/sys/class/thermal")
+            if (!thermalDir.exists()) return null
+
+            val rawValues = thermalDir.listFiles { f -> f.name.startsWith("thermal_zone") }
+                ?.mapNotNull { zone ->
+                    File(zone, "temp").takeIf { it.exists() }?.readText()?.trim()?.toLongOrNull()
+                } ?: return null
+
+            if (rawValues.isEmpty()) return null
+
+            val maxRaw = rawValues.max()
+            // Heuristic: if value > 1000 it's in millidegrees (common on Android)
+            val celsius = if (maxRaw > 1000) maxRaw / 1000f else maxRaw.toFloat()
+            // Sanity check: 10°C–120°C is physically realistic
+            if (celsius < 10f || celsius > 120f) return null
+            celsius
+        } catch (_: Exception) { null }
+    }
+
+    /**
      * Collects all hardware and inferred inference parameters for display.
+     * Respects batterySaverMode flag for effective config values.
      */
     fun buildDeviceReport(): DeviceReport {
         val cpuCount = Runtime.getRuntime().availableProcessors()
@@ -75,29 +104,34 @@ class LlamaServerManager(private val context: Context) {
         val hasVulkan = context.packageManager.hasSystemFeature(PackageManager.FEATURE_VULKAN_HARDWARE_LEVEL) ||
                         context.packageManager.hasSystemFeature(PackageManager.FEATURE_VULKAN_HARDWARE_VERSION)
 
-        val gpuLayers = detectGpuLayers(totalRamMb)
+        val effectiveGpuLayers = if (batterySaverMode) 0 else detectGpuLayers(totalRamMb)
         val cpuThreads = detectBigCoreCount()
-        val contextSize = when {
+        val effectiveContextSize = if (batterySaverMode) 2048 else when {
             totalRamMb < 3072 -> 2048
             totalRamMb < 6144 -> 4096
             else              -> 8192
         }
 
         return DeviceReport(
-            totalCores     = cpuCount,
-            bigCores       = bigCores,
-            maxFreqMhz     = maxFreqMhz,
-            totalRamMb     = totalRamMb,
-            availableRamMb = availableRamMb,
-            hasVulkan      = hasVulkan,
-            gpuLayers      = gpuLayers,
-            cpuThreads     = cpuThreads,
-            contextSize    = contextSize,
-            primaryAbi     = primaryAbi,
-            androidVersion = "Android ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})",
-            deviceModel    = "${Build.MANUFACTURER} ${Build.MODEL}"
+            totalCores       = cpuCount,
+            bigCores         = bigCores,
+            maxFreqMhz       = maxFreqMhz,
+            totalRamMb       = totalRamMb,
+            availableRamMb   = availableRamMb,
+            hasVulkan        = hasVulkan,
+            gpuLayers        = effectiveGpuLayers,
+            cpuThreads       = cpuThreads,
+            contextSize      = effectiveContextSize,
+            primaryAbi       = primaryAbi,
+            androidVersion   = "Android ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})",
+            deviceModel      = "${Build.MANUFACTURER} ${Build.MODEL}",
+            cpuTemperatureC  = getCpuTemperatureCelsius(),
+            batterySaverMode = batterySaverMode
         )
     }
+
+    /** When true: CPU-only (gpuLayers=0), smaller context (2048 tokens) — saves power & RAM */
+    var batterySaverMode: Boolean = false
 
     private var process: Process? = null
 
@@ -282,13 +316,16 @@ class LlamaServerManager(private val context: Context) {
             activityManager.getMemoryInfo(memInfo)
             val totalRamMb = memInfo.totalMem / (1024 * 1024)
 
-            val contextSize = when {
+            // Battery saver mode: CPU-only, smaller context — saves power & RAM
+            val contextSize = if (batterySaverMode) 2048 else when {
                 totalRamMb < 3072 -> 2048
                 totalRamMb < 6144 -> 4096
                 else              -> 8192
             }
-            val cpuThreads   = detectBigCoreCount()
-            val gpuLayers    = detectGpuLayers(totalRamMb)
+            val cpuThreads = detectBigCoreCount()
+            val gpuLayers  = if (batterySaverMode) 0 else detectGpuLayers(totalRamMb)
+
+            Log.i(TAG, "Battery saver: $batterySaverMode → ctx=$contextSize, threads=$cpuThreads, ngl=$gpuLayers")
 
             // Step 6: নতুন প্রসেস শুরু করো
             val proc: Process
