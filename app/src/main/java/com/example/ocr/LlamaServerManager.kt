@@ -16,6 +16,7 @@ class LlamaServerManager(private val context: Context) {
         private const val TAG = "LlamaServerManager"
         private const val SERVER_PORT = 8080
         const val SERVER_URL = "http://127.0.0.1:${SERVER_PORT}/completion"
+        const val CHAT_URL = "http://127.0.0.1:${SERVER_PORT}/v1/chat/completions"
         // ELF magic bytes — একটি বৈধ Linux/Android binary এভাবে শুরু হয়
         private val ELF_MAGIC = byteArrayOf(0x7F, 0x45, 0x4C, 0x46)
 
