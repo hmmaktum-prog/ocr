@@ -135,7 +135,7 @@
     <string name="dialog_engine_timeout_message">The server took too long to respond. This may happen when loading very large model files.\n\nWould you like to retry?</string>
 
     <string name="dialog_binary_missing_title">Server Binary Missing</string>
-    <string name="dialog_binary_missing_message">The llama-server binary is a placeholder and cannot run.\n\nPlease replace app/src/main/assets/llama-server with a real Android-compiled binary from the llama.cpp project and rebuild the APK.</string>
+    <string name="dialog_binary_missing_message">The llama-server binary is missing or invalid.\n\nThis APK was not built correctly. The binary (libllama_server.so) must be placed in jniLibs/arm64-v8a/ before building. Please use the GitHub Actions workflow to rebuild the APK.</string>
 
     <string name="dialog_unsupported_abi_title">Device Not Supported</string>
     <string name="dialog_unsupported_abi_message">This app requires an arm64-v8a device.\n\nYour device\'s primary ABI is: %1$s\n\nPlease use a physical Android device or an arm64-compatible emulator (API 30+).</string>

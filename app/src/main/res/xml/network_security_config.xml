@@ -9,13 +9,9 @@
         <domain includeSubdomains="false">localhost</domain>
     </domain-config>
 
-    <!-- Fix SEC-06 / SEC-09: Require certificate pinning for HuggingFace downloads -->
-    <domain-config>
+    <!-- HuggingFace model download — system CA trust ব্যবহার করা হয় (HTTPS) -->
+    <!-- Certificate pinning ব্যবহার করা হয়নি কারণ pin expired/wrong হলে download সম্পূর্ণ বন্ধ হয়ে যায় -->
+    <domain-config cleartextTrafficPermitted="false">
         <domain includeSubdomains="true">huggingface.co</domain>
-        <pin-set expiration="2027-01-01">
-            <!-- Pinned to HuggingFace's current public key hashes -->
-            <pin digest="SHA-256">p1V/9i0t10wHnQfItV3P3H9O9GgVl+wT1S5u3h0W8/s=</pin>
-            <pin digest="SHA-256">YLh1dUR9y6Kja30RrAn7JKnbQG/uEtLMkBgFF2Fuihg=</pin>
-        </pin-set>
     </domain-config>
 </network-security-config>

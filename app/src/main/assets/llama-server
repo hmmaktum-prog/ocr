@@ -1,3 +1,7 @@
-// Placeholder for actual llama-server binary.
-// Since official llama.cpp doesn't distribute aarch64 binaries directly via Github Releases,
-// you must place the compiled Android executable here.
+// এই ফাইলটি শুধু একটি নোট।
+//
+// llama-server binary আর এই assets/ ফোল্ডারে নেই।
+// এখন binary এখানে থাকে: app/src/main/jniLibs/arm64-v8a/libllama_server.so
+//
+// GitHub Actions workflow স্বয়ংক্রিয়ভাবে binary download/build করে jniLibs-এ রাখে।
+// APK build করার আগে binary jniLibs-এ থাকা আবশ্যক।
