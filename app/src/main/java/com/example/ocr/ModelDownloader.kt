@@ -245,16 +245,48 @@ class ModelDownloader(private val context: Context) {
                 Log.i(TAG, "Downloaded: ${targetFile.name} (${targetFile.length()} bytes)")
             }
         } catch (e: Exception) {
-            tempFile.delete()
+            if (e is SecurityException) {
+                tempFile.delete()
+            }
             throw e
         }
     }
 
-    @Suppress("UNUSED_PARAMETER")
     private fun verifyChecksum(file: File): Boolean {
         // Compute SHA-256 Hash of the file and compare against a known source of truth.
-        // For multi-GB files, this can be extremely slow on Android devices,
-        // so we place the architectural hook here but skip full hashing by default.
-        return true
+        val knownHashes = mapOf<String, String>(
+            // Add actual SHA-256 hashes here to enforce security:
+            // MAIN_MODEL_FILE to "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            // MMPROJ_FILE to "..."
+        )
+        
+        val expectedHash = knownHashes[file.name]
+        if (expectedHash.isNullOrEmpty()) {
+            Log.w(TAG, "No checksum available to verify ${file.name}, proceeding without verification.")
+            return true // Proceed conditionally if no hash is specified
+        }
+
+        Log.i(TAG, "Verifying checksum for ${file.name}...")
+        return try {
+            val digest = java.security.MessageDigest.getInstance("SHA-256")
+            file.inputStream().use { stream ->
+                val buffer = ByteArray(65536)
+                var read: Int
+                while (stream.read(buffer).also { read = it } != -1) {
+                    digest.update(buffer, 0, read)
+                }
+            }
+            val calculatedHash = digest.digest().joinToString("") { "%02x".format(it) }
+            if (calculatedHash.equals(expectedHash, ignoreCase = true)) {
+                Log.i(TAG, "Checksum matched successfully for ${file.name}")
+                true
+            } else {
+                Log.e(TAG, "Checksum MISMATCH for ${file.name}! Expected: $expectedHash, Got: $calculatedHash")
+                false
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Exception during checksum verification", e)
+            false
+        }
     }
 }

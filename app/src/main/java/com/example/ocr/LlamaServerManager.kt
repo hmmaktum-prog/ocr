@@ -8,8 +8,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import java.io.File
-import java.net.HttpURLConnection
-import java.net.URL
+import java.io.File
+import okhttp3.Request
 import java.util.concurrent.TimeUnit
 
 class LlamaServerManager(private val context: Context) {
@@ -26,6 +26,11 @@ class LlamaServerManager(private val context: Context) {
 
         // Output buffer limit — prevent unbounded memory growth
         private const val MAX_OUTPUT_SIZE = 10 * 1024 // 10KB
+        
+        private val healthClient = HttpClientProvider.client.newBuilder()
+            .connectTimeout(2, TimeUnit.SECONDS)
+            .readTimeout(2, TimeUnit.SECONDS)
+            .build()
     }
 
     /**
@@ -105,7 +110,7 @@ class LlamaServerManager(private val context: Context) {
                         context.packageManager.hasSystemFeature(PackageManager.FEATURE_VULKAN_HARDWARE_VERSION)
 
         val effectiveGpuLayers = if (batterySaverMode) 0 else detectGpuLayers(totalRamMb)
-        val cpuThreads = detectBigCoreCount()
+        val cpuThreads = cpuInfo.bigCoreCount
         val effectiveContextSize = if (batterySaverMode) 2048 else when {
             totalRamMb < 3072 -> 2048
             totalRamMb < 6144 -> 4096
@@ -161,12 +166,14 @@ class LlamaServerManager(private val context: Context) {
         fun onLoadingProgress(elapsedSeconds: Int, maxSeconds: Int, stageMessage: String)
     }
 
+    private data class CpuInfo(val bigCoreCount: Int, val maxFreqMhz: Long)
+
+    private val cpuInfo: CpuInfo by lazy { detectCpuInfo() }
+
     /**
      * Big core count detection — reads CPU max-frequency per core from sysfs.
-     * On big.LITTLE chips (Snapdragon, Dimensity) only big cores are counted.
-     * Using LITTLE cores for LLM inference is counter-productive — they're slow.
      */
-    private fun detectBigCoreCount(): Int {
+    private fun detectCpuInfo(): CpuInfo {
         return try {
             val cpuCount = Runtime.getRuntime().availableProcessors()
             val freqs = (0 until cpuCount).mapNotNull { i ->
@@ -175,17 +182,15 @@ class LlamaServerManager(private val context: Context) {
                     ?.readText()?.trim()?.toLongOrNull()
             }
             if (freqs.isEmpty()) {
-                // Fallback: half of all cores, minimum 2
-                return (cpuCount / 2).coerceAtLeast(2)
+                CpuInfo((cpuCount / 2).coerceAtLeast(2), 0L)
+            } else {
+                val maxFreq = freqs.max()
+                val bigCount = freqs.count { it >= maxFreq * 0.9 }.coerceAtLeast(2)
+                CpuInfo(bigCount, maxFreq)
             }
-            val maxFreq = freqs.max()
-            // Count cores whose max freq is ≥ 90% of the highest — those are big cores
-            val bigCount = freqs.count { it >= maxFreq * 0.9 }
-            Log.i(TAG, "CPU: $cpuCount cores total, $bigCount big cores detected (max ${maxFreq / 1000}MHz)")
-            bigCount.coerceAtLeast(2)
         } catch (e: Exception) {
             Log.w(TAG, "Big core detection failed, using fallback", e)
-            (Runtime.getRuntime().availableProcessors() / 2).coerceAtLeast(2)
+            CpuInfo((Runtime.getRuntime().availableProcessors() / 2).coerceAtLeast(2), 0L)
         }
     }
 
@@ -322,7 +327,7 @@ class LlamaServerManager(private val context: Context) {
                 totalRamMb < 6144 -> 4096
                 else              -> 8192
             }
-            val cpuThreads = detectBigCoreCount()
+            val cpuThreads = cpuInfo.bigCoreCount
             val gpuLayers  = if (batterySaverMode) 0 else detectGpuLayers(totalRamMb)
 
             Log.i(TAG, "Battery saver: $batterySaverMode → ctx=$contextSize, threads=$cpuThreads, ngl=$gpuLayers")
@@ -411,28 +416,22 @@ class LlamaServerManager(private val context: Context) {
 
                 // /health endpoint: "ok" = ready, "loading model" = still loading
                 var serverReady = false
-                var conn: HttpURLConnection? = null
                 try {
-                    conn = URL("http://127.0.0.1:${SERVER_PORT}/health")
-                        .openConnection() as HttpURLConnection
-                    conn.requestMethod = "GET"
-                    conn.connectTimeout = 1000
-                    conn.readTimeout = 1000
-                    val code = conn.responseCode
-                    if (code == 200) {
-                        val body = conn.inputStream.bufferedReader().readText()
-                        if (body.contains("\"ok\"")) {
-                            serverReady = true
+                    val request = Request.Builder().url("http://127.0.0.1:${SERVER_PORT}/health").build()
+                    healthClient.newCall(request).execute().use { response ->
+                        if (response.isSuccessful) {
+                            val body = response.body?.string() ?: ""
+                            if (body.contains("\"ok\"")) {
+                                serverReady = true
+                            } else {
+                                Log.d(TAG, "Health check: server still loading (body=$body)")
+                            }
                         } else {
-                            Log.d(TAG, "Health check: server still loading (body=$body)")
+                            Log.d(TAG, "Health check returned HTTP ${response.code} (still loading)")
                         }
-                    } else {
-                        Log.d(TAG, "Health check returned HTTP $code (still loading)")
                     }
                 } catch (_: Exception) {
                     // Server not yet accepting connections — keep waiting
-                } finally {
-                    conn?.disconnect()
                 }
                 if (serverReady) {
                     Log.i(TAG, "Server ready after ${elapsed}ms")
@@ -488,23 +487,17 @@ class LlamaServerManager(private val context: Context) {
     suspend fun isServerAlive(): Boolean = withContext(Dispatchers.IO) {
         // Process reference must exist and be alive
         if (getProcess()?.isAlive != true) return@withContext false
-        var conn: HttpURLConnection? = null
+        
         try {
-            conn = URL("http://127.0.0.1:${SERVER_PORT}/health")
-                .openConnection() as HttpURLConnection
-            conn.requestMethod = "GET"
-            conn.connectTimeout = 2000
-            conn.readTimeout = 2000
-            if (conn.responseCode == 200) {
-                val body = conn.inputStream.bufferedReader().readText()
-                body.contains("\"ok\"")
-            } else {
-                false
+            val request = Request.Builder().url("http://127.0.0.1:${SERVER_PORT}/health").build()
+            healthClient.newCall(request).execute().use { response ->
+                if (response.isSuccessful) {
+                    val body = response.body?.string() ?: ""
+                    body.contains("\"ok\"")
+                } else false
             }
         } catch (_: Exception) {
             false
-        } finally {
-            conn?.disconnect()
         }
     }
 }

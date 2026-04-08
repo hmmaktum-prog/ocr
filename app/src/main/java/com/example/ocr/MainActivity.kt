@@ -15,7 +15,6 @@ import android.os.Bundle
 import android.provider.OpenableColumns
 import android.util.Log
 import android.view.View
-import android.view.animation.LinearInterpolator
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
@@ -27,6 +26,7 @@ import androidx.core.content.FileProvider
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.exifinterface.media.ExifInterface
 import androidx.lifecycle.lifecycleScope
+import androidx.recyclerview.widget.LinearLayoutManager
 import com.example.ocr.databinding.ActivityMainBinding
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -35,6 +35,8 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.onCompletion
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.content.Context
@@ -54,17 +56,12 @@ class MainActivity : AppCompatActivity() {
     private lateinit var downloader: ModelDownloader
     private val ocrEngine = OcrEngine()
     private lateinit var llamaServerManager: LlamaServerManager
+    private lateinit var chatAdapter: ChatAdapter
 
     private var processingJob: Job? = null
     private var engineLoadingJob: Job? = null
     private var downloadJob: Job? = null
-    private var ramUpdateJob: Job? = null
-    private var lastOutputFile: File? = null
-    private var lastExtractedText: String = ""
     private var isEngineReady: Boolean = false
-
-    private var lastThumbnail: Bitmap? = null
-    private var iconAnimator: ObjectAnimator? = null
 
     private val saveDocumentLauncher = registerForActivityResult(
         ActivityResultContracts.CreateDocument(
@@ -72,41 +69,32 @@ class MainActivity : AppCompatActivity() {
         )
     ) { uri ->
         uri ?: return@registerForActivityResult
-        val src = lastOutputFile ?: return@registerForActivityResult
+        val src = File(getExternalFilesDir(null), "temp_export.docx")
+        if (!src.exists()) {
+            Toast.makeText(this, getString(R.string.error_save_failed), Toast.LENGTH_SHORT).show()
+            return@registerForActivityResult
+        }
         lifecycleScope.launch(Dispatchers.IO) {
             try {
                 contentResolver.openOutputStream(uri)?.use { out ->
                     src.inputStream().use { it.copyTo(out) }
                 }
                 withContext(Dispatchers.Main) {
-                    Toast.makeText(
-                        this@MainActivity,
-                        getString(R.string.status_saved_to_device),
-                        Toast.LENGTH_LONG
-                    ).show()
+                    Toast.makeText(this@MainActivity, getString(R.string.status_saved_to_device), Toast.LENGTH_LONG).show()
                 }
             } catch (e: Exception) {
-                Log.e(TAG, "Save to device failed", e)
-                withContext(Dispatchers.Main) {
-                    Toast.makeText(
-                        this@MainActivity,
-                        getString(R.string.error_save_failed),
-                        Toast.LENGTH_LONG
-                    ).show()
-                }
+                withContext(Dispatchers.Main) { Toast.makeText(this@MainActivity, getString(R.string.error_save_failed), Toast.LENGTH_SHORT).show() }
             }
         }
     }
 
     private val selectFileLauncher = registerForActivityResult(
         ActivityResultContracts.OpenDocument()
-    ) { uri: Uri? ->
-        uri?.let { handleFileSelected(it) }
-    }
+    ) { uri: Uri? -> uri?.let { handleFileSelected(it) } }
 
     private val notificationPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
-    ) { /* granted or not — we proceed silently either way */ }
+    ) { }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
@@ -117,22 +105,36 @@ class MainActivity : AppCompatActivity() {
         downloader = ModelDownloader(this)
         llamaServerManager = LlamaServerManager(this)
 
-        // Restore dark/light mode preference
         val prefs = getSharedPreferences("app_prefs", MODE_PRIVATE)
         val isDark = prefs.getBoolean("dark_mode", false)
         AppCompatDelegate.setDefaultNightMode(
             if (isDark) AppCompatDelegate.MODE_NIGHT_YES else AppCompatDelegate.MODE_NIGHT_NO
         )
 
-        // Toolbar menu
-        binding.toolbar.setOnMenuItemClickListener { item ->
+        chatAdapter = ChatAdapter(this) { msg ->
+            val baseDir = getExternalFilesDir(null) ?: filesDir
+            val outFile = File(baseDir, "temp_export.docx")
+            val success = ocrEngine.generateDocx(arrayOf(msg.streamedText), outFile.absolutePath, "Page")
+            if (success) {
+                saveDocumentLauncher.launch((msg.fileName ?: "document").substringBeforeLast(".") + ".docx")
+            } else {
+                Toast.makeText(this, "Failed to generate Docx", Toast.LENGTH_SHORT).show()
+            }
+        }
+        val layoutManager = LinearLayoutManager(this)
+        layoutManager.stackFromEnd = true
+        binding.chatRecyclerView.layoutManager = layoutManager
+        binding.chatRecyclerView.adapter = chatAdapter
+
+        binding.qualityChip.text = getString(R.string.mode_fast)
+
+        binding.topAppBar.setOnMenuItemClickListener { item ->
             when (item.itemId) {
                 R.id.action_toggle_theme -> {
                     val currentlyDark = AppCompatDelegate.getDefaultNightMode() == AppCompatDelegate.MODE_NIGHT_YES
                     val newMode = if (currentlyDark) AppCompatDelegate.MODE_NIGHT_NO else AppCompatDelegate.MODE_NIGHT_YES
                     AppCompatDelegate.setDefaultNightMode(newMode)
-                    getSharedPreferences("app_prefs", MODE_PRIVATE)
-                        .edit().putBoolean("dark_mode", !currentlyDark).apply()
+                    getSharedPreferences("app_prefs", MODE_PRIVATE).edit().putBoolean("dark_mode", !currentlyDark).apply()
                     true
                 }
                 R.id.action_device_info -> {
@@ -155,20 +157,17 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // Request POST_NOTIFICATIONS on Android 13+ for background processing notification
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
-                != PackageManager.PERMISSION_GRANTED) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
                 notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
             }
         }
 
-        setupBackPressHandler()
         setupButtons()
+        setupBackPressHandler()
         checkStartupState()
     }
 
-    /** Start the foreground service to keep the process alive in background */
     private fun startProcessingService() {
         val intent = Intent(this, OcrProcessingService::class.java)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -178,35 +177,44 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    /** Stop the foreground service when processing is done */
     private fun stopProcessingService() {
         stopService(Intent(this, OcrProcessingService::class.java))
     }
 
+    private fun setMainState(subtitle: String, loading: Boolean) {
+        binding.topAppBar.subtitle = subtitle
+        binding.mainProgressIndicator.visibility = if (loading) View.VISIBLE else View.GONE
+        if (!loading && isEngineReady) {
+            binding.addFileButton.isEnabled = true
+            binding.chatInputHint.text = "Select an image or PDF to OCR..."
+        }
+    }
+
     private fun checkStartupState() {
-        binding.progressBar.visibility = View.GONE
         if (modelsAlreadyDownloaded()) {
-            // Models exist — check if server is already running (hybrid: survived from previous session)
-            binding.statusText.text = getString(R.string.status_checking_engine)
-            binding.btnDownload.text = getString(R.string.btn_initialize_engine)
+            binding.emptyStateLayout.visibility = View.VISIBLE
+            binding.downloadModelButton.visibility = View.GONE
+            binding.startEngineButton.visibility = View.VISIBLE
+            binding.startEngineButton.text = getString(R.string.btn_initialize_engine)
+            setMainState(getString(R.string.status_checking_engine), true)
 
             lifecycleScope.launch {
                 val alive = llamaServerManager.isServerAlive()
                 if (alive) {
-                    // Server already warm — no reload needed
-                    Log.i(TAG, "Hybrid: server already running, skipping load")
                     isEngineReady = true
-                    binding.statusText.text = getString(R.string.status_engine_ready)
-                    binding.btnSelectFile.isEnabled = true
-                    binding.btnDownload.visibility = View.GONE
+                    binding.emptyStateLayout.visibility = if (chatAdapter.itemCount == 0) View.VISIBLE else View.GONE
+                    binding.startEngineButton.visibility = View.GONE
+                    setMainState(getString(R.string.status_engine_ready), false)
                 } else {
-                    binding.statusText.text = getString(R.string.status_models_found)
+                    setMainState(getString(R.string.status_models_found), false)
                 }
             }
         } else {
-            binding.statusText.text = getString(R.string.status_initializing)
+            binding.emptyStateLayout.visibility = View.VISIBLE
+            binding.downloadModelButton.visibility = View.VISIBLE
+            binding.startEngineButton.visibility = View.GONE
+            setMainState(getString(R.string.status_initializing), false)
 
-            // Fix USE-11: First-run onboarding screen
             val prefs = getSharedPreferences("app_prefs", MODE_PRIVATE)
             if (!prefs.getBoolean("onboarding_shown", false)) {
                 showOnboardingDialog()
@@ -217,20 +225,14 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
-        // Hybrid approach: if engine was ready but the OS killed the server process
-        // while the app was in background, automatically re-initiate loading.
         if (isEngineReady) {
             lifecycleScope.launch {
-                val alive = llamaServerManager.isServerAlive()
-                if (!alive) {
-                    Log.w(TAG, "Hybrid: server died in background — reloading")
+                if (!llamaServerManager.isServerAlive()) {
                     isEngineReady = false
-                    binding.btnSelectFile.isEnabled = false
-                    binding.btnDownload.visibility = View.VISIBLE
-                    binding.statusText.text = getString(R.string.status_engine_reloading)
+                    binding.emptyStateLayout.visibility = if (chatAdapter.itemCount == 0) View.VISIBLE else View.GONE
+                    setMainState(getString(R.string.status_engine_reloading), true)
                     initEngine()
                 }
-                // If alive, do nothing — user continues seamlessly
             }
         }
     }
@@ -245,14 +247,19 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun setupButtons() {
-        binding.btnDownload.setOnClickListener { startModelDownload() }
-        binding.btnSelectFile.setOnClickListener { selectFileLauncher.launch(SUPPORTED_MIME_TYPES) }
-        binding.btnCancel.setOnClickListener { showCancelDialog() }
-        binding.btnShare.setOnClickListener { lastOutputFile?.let { shareFile(it) } }
-        binding.btnPreview.setOnClickListener { showTextPreview() }
-        binding.btnSaveToDevice.setOnClickListener {
-            val f = lastOutputFile ?: return@setOnClickListener
-            saveDocumentLauncher.launch(f.name)
+        binding.addFileButton.setOnClickListener { selectFileLauncher.launch(SUPPORTED_MIME_TYPES) }
+        binding.chatInputHint.setOnClickListener { selectFileLauncher.launch(SUPPORTED_MIME_TYPES) }
+        binding.cancelButton.setOnClickListener { showCancelDialog() }
+        binding.downloadModelButton.setOnClickListener { startModelDownload() }
+        binding.startEngineButton.setOnClickListener { initEngine() }
+
+        binding.qualityChip.setOnClickListener {
+            val isFast = binding.qualityChip.text == getString(R.string.mode_fast)
+            if (isFast) {
+                binding.qualityChip.text = getString(R.string.mode_hq)
+            } else {
+                binding.qualityChip.text = getString(R.string.mode_fast)
+            }
         }
     }
 
@@ -262,7 +269,6 @@ class MainActivity : AppCompatActivity() {
                 when {
                     processingJob?.isActive == true -> showCancelDialog()
                     engineLoadingJob?.isActive == true -> showEngineCancelDialog()
-                    // Fix LOGIC-03: handle back press during download
                     downloadJob?.isActive == true -> showDownloadCancelDialog()
                     else -> {
                         isEnabled = false
@@ -273,13 +279,8 @@ class MainActivity : AppCompatActivity() {
         })
     }
 
-    // Fix LOGIC-18 / UI-03: Explicitly handle config changes to prevent layout resets while
-    // maintaining the running coroutines.
     override fun onConfigurationChanged(newConfig: android.content.res.Configuration) {
         super.onConfigurationChanged(newConfig)
-        // No specific UI adjustments needed for this layout on rotation,
-        // but overriding prevents the activity from being recreated and
-        // killing the active Job/LifecycleScope tasks.
     }
 
     private fun showEngineCancelDialog() {
@@ -289,15 +290,13 @@ class MainActivity : AppCompatActivity() {
             .setPositiveButton(getString(R.string.dialog_yes)) { _, _ ->
                 engineLoadingJob?.cancel()
                 llamaServerManager.stopServer()
-                binding.progressBar.visibility = View.GONE
-                binding.btnDownload.isEnabled = true
-                binding.statusText.text = getString(R.string.status_cancelled)
+                binding.downloadModelButton.isEnabled = true
+                setMainState(getString(R.string.status_cancelled), false)
             }
             .setNegativeButton(getString(R.string.dialog_no), null)
             .show()
     }
 
-    // Fix LOGIC-03: New dialog for cancelling model download
     private fun showDownloadCancelDialog() {
         AlertDialog.Builder(this)
             .setTitle(getString(R.string.dialog_cancel_download_title))
@@ -305,9 +304,8 @@ class MainActivity : AppCompatActivity() {
             .setPositiveButton(getString(R.string.dialog_yes)) { _, _ ->
                 downloadJob?.cancel()
                 downloadJob = null
-                binding.progressBar.visibility = View.GONE
-                binding.btnDownload.isEnabled = true
-                binding.statusText.text = getString(R.string.status_cancelled)
+                binding.downloadModelButton.isEnabled = true
+                setMainState(getString(R.string.status_cancelled), false)
             }
             .setNegativeButton(getString(R.string.dialog_no), null)
             .show()
@@ -319,7 +317,6 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
-        // Fix USE-06: Network type check warning
         val cm = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
         val isWifi = cm.activeNetwork?.let { 
             cm.getNetworkCapabilities(it)?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) 
@@ -342,32 +339,27 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun performModelDownload() {
-        binding.statusText.text = getString(R.string.status_checking_models)
-        setProgressIndeterminate(true)
-        binding.btnDownload.isEnabled = false
+        setMainState(getString(R.string.status_checking_models), true)
+        binding.downloadModelButton.isEnabled = false
 
-        // Fix LOGIC-03: Store job reference for back-press cancellation
         downloadJob = lifecycleScope.launch {
             downloader.checkAndDownloadModels(
                 onProgress = { overallPercent, fileName, fileIndex, totalFiles ->
                     runOnUiThread {
-                        setProgressIndeterminate(false)
-                        binding.progressBar.progress = overallPercent
-                        binding.statusText.text = getString(
+                        setMainState(getString(
                             R.string.status_downloading_model_detail,
                             fileIndex + 1, totalFiles, fileName, overallPercent
-                        )
+                        ), true)
                     }
                 },
                 onComplete = { success ->
                     runOnUiThread {
                         downloadJob = null
                         if (success) {
-                            binding.statusText.text = getString(R.string.status_models_ready)
+                            setMainState(getString(R.string.status_models_ready), false)
                             initEngine()
                         } else {
-                            binding.progressBar.visibility = View.GONE
-                            binding.btnDownload.isEnabled = true
+                            binding.downloadModelButton.isEnabled = true
                             showRetryDownloadDialog()
                         }
                     }
@@ -382,7 +374,7 @@ class MainActivity : AppCompatActivity() {
             .setMessage(getString(R.string.dialog_retry_download_message))
             .setPositiveButton(getString(R.string.dialog_retry)) { _, _ -> performModelDownload() }
             .setNegativeButton(getString(R.string.dialog_no)) { _, _ ->
-                binding.statusText.text = getString(R.string.status_models_failed)
+                setMainState(getString(R.string.status_models_failed), false)
             }
             .setCancelable(false)
             .show()
@@ -394,8 +386,8 @@ class MainActivity : AppCompatActivity() {
             .setMessage(getString(R.string.dialog_cancel_message))
             .setPositiveButton(getString(R.string.dialog_yes)) { _, _ ->
                 processingJob?.cancel()
-                resetToReadyState()
-                binding.statusText.text = getString(R.string.status_cancelled)
+                setProcessingUIVisible(false)
+                setMainState(getString(R.string.status_cancelled), false)
             }
             .setNegativeButton(getString(R.string.dialog_no), null)
             .show()
@@ -410,33 +402,25 @@ class MainActivity : AppCompatActivity() {
         val modelDir = getModelsDir()
         val mainModel = File(modelDir, ModelDownloader.MAIN_MODEL_FILE)
         val mmproj = File(modelDir, ModelDownloader.MMPROJ_FILE)
-        // শুধু existence নয়, minimum size-ও যাচাই করো।
-        // আংশিক download হলে llama-server crash করে — তাই strict validation।
-        // Main model: PaddleOCR-VL-1.5.gguf ≈ 1.5–2GB → কমপক্ষে 100MB হতে হবে
-        // mmproj: PaddleOCR-VL-1.5-mmproj.gguf ≈ 200–500MB → কমপক্ষে 10MB হতে হবে
-        val mainModelMinBytes = 100L * 1024 * 1024   // 100 MB
-        val mmprojMinBytes    = 10L  * 1024 * 1024   // 10 MB
+        val mainModelMinBytes = 100L * 1024 * 1024
+        val mmprojMinBytes    = 10L  * 1024 * 1024
         return mainModel.exists() && mainModel.length() >= mainModelMinBytes &&
                mmproj.exists()    && mmproj.length()    >= mmprojMinBytes
     }
 
     private fun initEngine() {
-        binding.progressBar.visibility = View.VISIBLE
-        binding.progressBar.isIndeterminate = true
-        binding.statusText.text = getString(R.string.status_engine_starting)
-        binding.btnDownload.isEnabled = false
+        setMainState(getString(R.string.status_engine_starting), true)
+        binding.downloadModelButton.isEnabled = false
+        binding.startEngineButton.isEnabled = false
 
         llamaServerManager.setLoadingProgressListener(
             object : LlamaServerManager.LoadingProgressListener {
                 override fun onLoadingProgress(elapsedSeconds: Int, maxSeconds: Int, stageMessage: String) {
                     runOnUiThread {
-                        binding.progressBar.isIndeterminate = false
-                        binding.progressBar.max = maxSeconds
-                        binding.progressBar.progress = elapsedSeconds
-                        binding.statusText.text = getString(
+                        setMainState(getString(
                             R.string.status_engine_loading_stage,
                             stageMessage, elapsedSeconds
-                        )
+                        ), true)
                     }
                 }
             }
@@ -450,24 +434,24 @@ class MainActivity : AppCompatActivity() {
             val result = llamaServerManager.extractAndStartServer(modelPath, mmprojPath)
 
             withContext(Dispatchers.Main) {
-                binding.progressBar.visibility = View.GONE
                 llamaServerManager.setLoadingProgressListener(null)
                 when (result) {
                     is LlamaServerManager.StartResult.Success -> {
                         isEngineReady = true
-                        binding.statusText.text = getString(R.string.status_engine_ready)
-                        binding.btnSelectFile.isEnabled = true
-                        binding.btnDownload.visibility = View.GONE
+                        binding.startEngineButton.visibility = View.GONE
+                        binding.emptyStateLayout.visibility = if (chatAdapter.itemCount == 0) View.VISIBLE else View.GONE
+                        setMainState(getString(R.string.status_engine_ready), false)
+                        binding.chatInputHint.text = "Select an image or PDF to OCR..."
                     }
                     is LlamaServerManager.StartResult.InvalidBinary -> {
-                        binding.statusText.text = getString(R.string.status_engine_failed)
+                        setMainState(getString(R.string.status_engine_failed), false)
                         showEngineErrorDialog(
                             getString(R.string.dialog_binary_missing_title),
                             getString(R.string.dialog_binary_missing_message)
                         )
                     }
                     is LlamaServerManager.StartResult.UnsupportedAbi -> {
-                        binding.statusText.text = getString(R.string.status_engine_failed)
+                        setMainState(getString(R.string.status_engine_failed), false)
                         showEngineErrorDialog(
                             getString(R.string.dialog_unsupported_abi_title),
                             getString(R.string.dialog_unsupported_abi_message, result.deviceAbi)
@@ -475,15 +459,15 @@ class MainActivity : AppCompatActivity() {
                     }
                     is LlamaServerManager.StartResult.ProcessCrashed -> {
                         val detail = result.output.take(300).ifEmpty { getString(R.string.error_no_output) }
-                        binding.statusText.text = getString(R.string.status_engine_failed)
+                        setMainState(getString(R.string.status_engine_failed), false)
                         showEngineRetryDialog(getString(R.string.dialog_engine_crash_message, detail))
                     }
                     is LlamaServerManager.StartResult.Timeout -> {
-                        binding.statusText.text = getString(R.string.status_engine_failed)
+                        setMainState(getString(R.string.status_engine_failed), false)
                         showEngineRetryDialog(getString(R.string.dialog_engine_timeout_message))
                     }
                     is LlamaServerManager.StartResult.Error -> {
-                        binding.statusText.text = getString(R.string.status_engine_failed)
+                        setMainState(getString(R.string.status_engine_failed), false)
                         showEngineRetryDialog(result.message)
                     }
                 }
@@ -497,7 +481,7 @@ class MainActivity : AppCompatActivity() {
             .setMessage(detail)
             .setPositiveButton(getString(R.string.dialog_retry)) { _, _ -> initEngine() }
             .setNegativeButton(getString(R.string.dialog_no)) { _, _ ->
-                binding.btnDownload.isEnabled = true
+                binding.startEngineButton.isEnabled = true
             }
             .setCancelable(false)
             .show()
@@ -508,7 +492,7 @@ class MainActivity : AppCompatActivity() {
             .setTitle(title)
             .setMessage(message)
             .setPositiveButton(android.R.string.ok) { _, _ ->
-                binding.btnDownload.isEnabled = true
+                binding.startEngineButton.isEnabled = true
             }
             .setCancelable(false)
             .show()
@@ -517,7 +501,7 @@ class MainActivity : AppCompatActivity() {
     private fun showDeviceInfoDialog() {
         val report = llamaServerManager.buildDeviceReport()
 
-        val sb = StringBuilder()
+        val sb = java.lang.StringBuilder()
         sb.appendLine(getString(R.string.device_info_model, report.deviceModel))
         sb.appendLine(getString(R.string.device_info_android, report.androidVersion))
         sb.appendLine(getString(R.string.device_info_abi, report.primaryAbi))
@@ -574,6 +558,11 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun handleFileSelected(uri: Uri) {
+        if (!isEngineReady) {
+            Toast.makeText(this, "Wait for engine to be ready.", Toast.LENGTH_SHORT).show()
+            return
+        }
+
         val fileName = getFileName(uri)
         val mimeType = contentResolver.getType(uri)
 
@@ -586,26 +575,40 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
-        binding.fileInfoText.apply {
-            text = getString(R.string.file_info, fileName)
-            visibility = View.VISIBLE
-        }
+        binding.emptyStateLayout.visibility = View.GONE
 
-        // Load thumbnail of the selected file in background, then start processing
+        val userMsg = ChatMessage(
+            type = ChatMessage.Type.USER,
+            fileName = fileName,
+            fileSizeMb = getFileSizeMb(uri)
+        )
+        chatAdapter.addMessage(userMsg)
+        binding.chatRecyclerView.scrollToPosition(chatAdapter.itemCount - 1)
+
         lifecycleScope.launch {
             val thumb = withContext(Dispatchers.IO) { loadThumbnail(uri, isPdf) }
-            lastThumbnail = thumb
             if (thumb != null) {
-                binding.statusIcon.clearColorFilter()
-                binding.statusIcon.imageTintList = null
-                binding.statusIcon.scaleType = android.widget.ImageView.ScaleType.CENTER_CROP
-                binding.statusIcon.setImageBitmap(thumb)
+                // Save thumbnail to cache instead of holding memory
+                val thumbFile = File(cacheDir, "thumb_${userMsg.id}.png")
+                withContext(Dispatchers.IO) {
+                    java.io.FileOutputStream(thumbFile).use { out ->
+                        thumb.compress(Bitmap.CompressFormat.PNG, 90, out)
+                    }
+                }
+                thumb.recycle() // Release memory early
+
+                // Update User Message Thumbnail Path
+                val index = chatAdapter.getItems().indexOfFirst { it.id == userMsg.id }
+                if (index != -1) {
+                    val updated = chatAdapter.getItems()[index].copy(thumbnailPath = thumbFile.absolutePath)
+                    (chatAdapter.getItems() as MutableList)[index] = updated
+                    chatAdapter.notifyItemChanged(index)
+                }
             }
             processFile(uri, fileName, isPdf)
         }
     }
 
-    /** Decode a small thumbnail from image or first page of PDF */
     private fun loadThumbnail(uri: Uri, isPdf: Boolean): Bitmap? = try {
         if (isPdf) {
             contentResolver.openFileDescriptor(uri, "r")?.use { fd ->
@@ -627,105 +630,62 @@ class MainActivity : AppCompatActivity() {
             contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, opts) }
         }
     } catch (e: Exception) {
-        Log.w(TAG, "Thumbnail load failed", e)
         null
+    }
+
+    private fun setProcessingUIVisible(processing: Boolean) {
+        if (processing) {
+            binding.addFileButton.isEnabled = false
+            binding.chatInputHint.text = "Processing..."
+            binding.cancelButton.visibility = View.VISIBLE
+            binding.qualityChip.isEnabled = false
+        } else {
+            binding.addFileButton.isEnabled = true
+            binding.chatInputHint.text = "Select an image or PDF to OCR..."
+            binding.cancelButton.visibility = View.GONE
+            binding.qualityChip.isEnabled = true
+        }
     }
 
     private fun processFile(uri: Uri, fileName: String, isPdf: Boolean) {
         processingJob?.cancel()
-        setProcessingState(true)
-
-        // Start foreground service — keeps process alive if user switches to another app
+        setProcessingUIVisible(true)
         startProcessingService()
 
+        val botMsg = ChatMessage(type = ChatMessage.Type.BOT, state = ChatMessage.BotState.THINKING)
+        chatAdapter.addMessage(botMsg)
+        binding.chatRecyclerView.scrollToPosition(chatAdapter.itemCount - 1)
+
         val processingStartMs = System.currentTimeMillis()
+        val isFastMode = binding.qualityChip.text == getString(R.string.mode_fast)
 
         processingJob = lifecycleScope.launch(Dispatchers.IO) {
             try {
-                val extractedTexts = mutableListOf<String>()
-                val failedPages = mutableListOf<Int>()
-                val tokPerSecList = mutableListOf<Double>()
-
                 if (isPdf) {
-                    processPdf(uri, extractedTexts, failedPages, tokPerSecList, processingStartMs)
+                    processPdfStreaming(uri, botMsg.id, isFastMode, processingStartMs)
                 } else {
-                    processImage(uri, extractedTexts, tokPerSecList)
+                    processImageStreaming(uri, botMsg.id, isFastMode, processingStartMs)
                 }
-
-                if (extractedTexts.isEmpty() || extractedTexts.all { it.isBlank() }) {
-                    withContext(Dispatchers.Main) {
-                        stopProcessingService()
-                        setProcessingState(false)
-                        binding.statusText.text = getString(R.string.status_no_output)
-                    }
-                    return@launch
-                }
-
-                withContext(Dispatchers.Main) {
-                    binding.statusText.text = getString(R.string.status_generating_docx)
-                }
-
-                val sanitizedName = sanitizeFileName(fileName.substringBeforeLast("."))
-                val baseDir = getExternalFilesDir(null) ?: filesDir
-                val outDir = File(baseDir, "output").apply { if (!exists()) mkdirs() }
-                val outFile = generateUniqueFile(outDir, sanitizedName)
-
-                val result = ocrEngine.generateDocx(extractedTexts.toTypedArray(), outFile.absolutePath, getString(R.string.page_prefix))
-
-                val elapsedSec = ((System.currentTimeMillis() - processingStartMs) / 1000).toInt()
-                val avgTokPerSec = if (tokPerSecList.isNotEmpty()) tokPerSecList.average() else null
-
-                withContext(Dispatchers.Main) {
-                    stopProcessingService()
-                    setProcessingState(false)
-                    if (result) {
-                        lastOutputFile = outFile
-                        lastExtractedText = extractedTexts.joinToString("\n\n")
-                        binding.btnPreview.visibility = View.VISIBLE
-                        binding.btnShare.visibility = View.VISIBLE
-                        binding.btnSaveToDevice.visibility = View.VISIBLE
-
-                        val tokStr = if (avgTokPerSec != null)
-                            "  •  " + getString(R.string.status_tok_per_sec, avgTokPerSec)
-                        else ""
-                        val statusMsg = getString(R.string.status_saved_success_timed, outFile.name, elapsedSec) + tokStr
-                        binding.statusText.text = if (failedPages.isNotEmpty()) {
-                            statusMsg + "\n" + getString(
-                                R.string.status_ocr_partial_fail,
-                                failedPages.size,
-                                failedPages.joinToString(", ")
-                            )
-                        } else statusMsg
-                    } else {
-                        binding.statusText.text = getString(R.string.status_saved_failed)
-                    }
-                }
-
             } catch (e: CancellationException) {
                 Log.i(TAG, "Processing cancelled")
-                withContext(Dispatchers.Main) { stopProcessingService() }
             } catch (e: Exception) {
                 Log.e(TAG, "Processing failed", e)
                 withContext(Dispatchers.Main) {
+                    chatAdapter.updateBotMessage(botMsg.id) {
+                        it.state = ChatMessage.BotState.ERROR
+                        it.errorMessage = getUserFriendlyError(e)
+                    }
+                }
+            } finally {
+                withContext(Dispatchers.Main) {
                     stopProcessingService()
-                    setProcessingState(false)
-                    binding.statusText.text = getString(R.string.status_error, getUserFriendlyError(e))
+                    setProcessingUIVisible(false)
                 }
             }
         }
     }
 
-    private fun generateUniqueFile(dir: File, baseName: String): File {
-        var file = File(dir, "$baseName.docx")
-        var counter = 1
-        while (file.exists()) {
-            file = File(dir, "${baseName}_$counter.docx")
-            counter++
-        }
-        return file
-    }
-
-    private suspend fun processPdf(uri: Uri, extractedTexts: MutableList<String>, failedPages: MutableList<Int>, tokPerSecList: MutableList<Double>, startMs: Long = System.currentTimeMillis()) {
+    private suspend fun processPdfStreaming(uri: Uri, msgId: String, isFastMode: Boolean, startMs: Long) {
         val fd = contentResolver.openFileDescriptor(uri, "r")
             ?: throw Exception("Cannot open file")
 
@@ -741,64 +701,102 @@ class MainActivity : AppCompatActivity() {
             val pageCount = renderer.pageCount
             if (pageCount == 0) throw Exception(getString(R.string.error_pdf_empty))
 
-            // Fix LOGIC-02: Open page 0 only once to get both dimensions
             val (defaultWidth, defaultHeight) = renderer.openPage(0).use { page ->
                 Pair(page.width, page.height)
             }
 
-            // Fix PERF-01: Query available memory once — outside the loop
             val availableMemMb = getAvailableMemoryMb()
-            val scale = calculateSafeScale(defaultWidth, defaultHeight, availableMemMb)
+            val maxDim = if (isFastMode) 1536 else Int.MAX_VALUE
+            val baseScale = calculateSafeScale(defaultWidth, defaultHeight, availableMemMb)
+
+            var accumulatedText = ""
+            var currentTokPerSec: Double? = null
 
             for (i in 0 until pageCount) {
                 currentCoroutineContext().ensureActive()
-
                 val elapsedSec = ((System.currentTimeMillis() - startMs) / 1000).toInt()
+
                 withContext(Dispatchers.Main) {
-                    binding.progressBar.apply {
-                        isIndeterminate = false
-                        max = pageCount
-                        progress = i + 1
+                    chatAdapter.updateBotMessage(msgId) {
+                        it.state = ChatMessage.BotState.STREAMING
+                        it.currentPage = i + 1
+                        it.totalPages = pageCount
+                        it.elapsedSeconds = elapsedSec
+                        it.streamedText = accumulatedText
                     }
-                    binding.statusText.text = getString(R.string.status_processing_time_pages, i + 1, pageCount, elapsedSec)
+                    binding.chatRecyclerView.scrollToPosition(chatAdapter.itemCount - 1)
+                }
+
+                Intent(this@MainActivity, OcrProcessingService::class.java).also { intent ->
+                    intent.action = "UPDATE_PROGRESS"
+                    intent.putExtra("CURRENT_PAGE", i + 1)
+                    intent.putExtra("TOTAL_PAGES", pageCount)
+                    startService(intent)
                 }
 
                 renderer.openPage(i).use { page ->
                     val pageScale = if (page.width != defaultWidth) {
                         calculateSafeScale(page.width, page.height, availableMemMb)
-                    } else scale
+                    } else baseScale
 
                     val bitmap = Bitmap.createBitmap(
-                        (page.width * pageScale).toInt(),
-                        (page.height * pageScale).toInt(),
+                        (page.width * pageScale).toInt().coerceAtLeast(1),
+                        (page.height * pageScale).toInt().coerceAtLeast(1),
                         Bitmap.Config.ARGB_8888
                     )
                     page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_PRINT)
 
-                    val result = ocrEngine.processImage(bitmap)
-                    result.onSuccess { ocrResult ->
-                        extractedTexts.add(ocrResult.text)
-                        ocrResult.tokensPerSecond?.let { tokPerSecList.add(it) }
+                    try {
+                        ocrEngine.processImageStreaming(bitmap, maxDim)
+                            .onCompletion { bitmap.recycle() }
+                            .collect { token ->
+                                currentCoroutineContext().ensureActive()
+                                val nowSec = ((System.currentTimeMillis() - startMs) / 1000).toInt()
+                                withContext(Dispatchers.Main) {
+                                    chatAdapter.updateBotMessage(msgId) {
+                                        when (token) {
+                                            is OcrEngine.StreamToken.Text -> {
+                                                it.streamedText = accumulatedText + token.content
+                                            }
+                                            is OcrEngine.StreamToken.Error -> {
+                                                it.streamedText = accumulatedText + "\n\n[Page Error: ${token.message}]\n\n"
+                                            }
+                                            is OcrEngine.StreamToken.Done -> {
+                                                accumulatedText += token.fullText + "\n\n"
+                                                it.streamedText = accumulatedText
+                                                currentTokPerSec = token.tokPerSec
+                                            }
+                                            else -> {}
+                                        }
+                                        it.elapsedSeconds = nowSec
+                                    }
+                                    binding.chatRecyclerView.scrollToPosition(chatAdapter.itemCount - 1)
+                                }
+                            }
+                    } catch (e: Exception) {
+                        bitmap.recycle()
+                        if (e is CancellationException) throw e
+                        accumulatedText += "\n\n[Page ${i+1} Failed: ${e.message}]\n\n"
                     }
-                    result.onFailure { e ->
-                        Log.w(TAG, "OCR failed on page ${i + 1}", e)
-                        failedPages.add(i + 1)
-                        // Fix LOGIC-16: placeholder instead of empty string
-                        extractedTexts.add(getString(R.string.ocr_page_failed_placeholder, i + 1))
-                    }
-                    bitmap.recycle()
                 }
             }
+
+            withContext(Dispatchers.Main) {
+                chatAdapter.updateBotMessage(msgId) {
+                    it.state = ChatMessage.BotState.DONE
+                    it.streamedText = accumulatedText.trim()
+                    it.tokPerSec = currentTokPerSec
+                    it.elapsedSeconds = ((System.currentTimeMillis() - startMs) / 1000).toInt()
+                }
+            }
+
         } finally {
             renderer.close()
         }
     }
 
-    private suspend fun processImage(uri: Uri, extractedTexts: MutableList<String>, tokPerSecList: MutableList<Double> = mutableListOf()) {
-        withContext(Dispatchers.Main) {
-            setProgressIndeterminate(true)
-            binding.statusText.text = getString(R.string.status_processing_image)
-        }
+    private suspend fun processImageStreaming(uri: Uri, msgId: String, isFastMode: Boolean, startMs: Long) {
+        val maxDim = if (isFastMode) 1536 else Int.MAX_VALUE
 
         val dimensions = getImageDimensions(uri)
         if (dimensions != null) {
@@ -809,30 +807,65 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        contentResolver.openInputStream(uri)?.use { inputStream ->
-            var bitmap = BitmapFactory.decodeStream(inputStream)
+        val inputStream = contentResolver.openInputStream(uri)
+            ?: throw Exception("Cannot open input stream")
+
+        val bitmap: Bitmap
+        try {
+            var rawBitmap = BitmapFactory.decodeStream(inputStream)
                 ?: throw Exception(getString(R.string.error_decode_failed))
-
             try {
-                try {
-                    contentResolver.openInputStream(uri)?.use { exifStream ->
-                        bitmap = correctBitmapRotation(bitmap, exifStream)
-                    }
-                } catch (e: Exception) {
-                    Log.w(TAG, "EXIF rotation correction failed, using original", e)
+                contentResolver.openInputStream(uri)?.use { exifStream ->
+                    rawBitmap = correctBitmapRotation(rawBitmap, exifStream)
                 }
-
-                val result = ocrEngine.processImage(bitmap)
-                result.onSuccess { ocrResult ->
-                    extractedTexts.add(ocrResult.text)
-                    ocrResult.tokensPerSecond?.let { tokPerSecList.add(it) }
-                }
-                result.onFailure { e -> throw e }
-            } finally {
-                // Fix LOGIC-01: Always recycle bitmap — even when OCR fails
-                bitmap.recycle()
+            } catch (e: Exception) {
+                Log.w(TAG, "EXIF rotation failed", e)
             }
-        } ?: throw Exception("Cannot open input stream")
+            bitmap = rawBitmap
+        } finally {
+            inputStream.close()
+        }
+
+        var accumulatedText = ""
+        var tokPerSec: Double? = null
+
+        ocrEngine.processImageStreaming(bitmap, maxDim)
+            .onCompletion { bitmap.recycle() }
+            .collect { token ->
+                currentCoroutineContext().ensureActive()
+                val nowSec = ((System.currentTimeMillis() - startMs) / 1000).toInt()
+
+                withContext(Dispatchers.Main) {
+                    chatAdapter.updateBotMessage(msgId) {
+                        when (token) {
+                            is OcrEngine.StreamToken.Thinking -> {
+                                it.state = ChatMessage.BotState.THINKING
+                                it.elapsedSeconds = nowSec
+                            }
+                            is OcrEngine.StreamToken.Text -> {
+                                it.state = ChatMessage.BotState.STREAMING
+                                accumulatedText += token.content
+                                it.streamedText = accumulatedText
+                                it.elapsedSeconds = nowSec
+                            }
+                            is OcrEngine.StreamToken.Done -> {
+                                it.state = ChatMessage.BotState.DONE
+                                it.streamedText = token.fullText
+                                it.tokPerSec = token.tokPerSec
+                                it.elapsedSeconds = nowSec
+                            }
+                            is OcrEngine.StreamToken.Error -> {
+                                it.state = ChatMessage.BotState.ERROR
+                                it.errorMessage = token.message
+                                it.elapsedSeconds = nowSec
+                            }
+                        }
+                    }
+                    if (token !is OcrEngine.StreamToken.Thinking) {
+                        binding.chatRecyclerView.scrollToPosition(chatAdapter.itemCount - 1)
+                    }
+                }
+            }
     }
 
     private fun getImageDimensions(uri: Uri): Pair<Int, Int>? {
@@ -852,9 +885,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun correctBitmapRotation(bitmap: Bitmap, inputStream: InputStream): Bitmap {
         val exif = ExifInterface(inputStream)
-        val orientation = exif.getAttributeInt(
-            ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL
-        )
+        val orientation = exif.getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)
         val rotationDegrees = when (orientation) {
             ExifInterface.ORIENTATION_ROTATE_90  -> 90f
             ExifInterface.ORIENTATION_ROTATE_180 -> 180f
@@ -867,7 +898,6 @@ class MainActivity : AppCompatActivity() {
         return rotated
     }
 
-    // Fix PERF-01: Separate function — called ONCE before the PDF loop
     private fun getAvailableMemoryMb(): Long {
         val activityManager = getSystemService(ACTIVITY_SERVICE) as ActivityManager
         val memInfo = ActivityManager.MemoryInfo()
@@ -875,8 +905,6 @@ class MainActivity : AppCompatActivity() {
         return memInfo.availMem / (1024 * 1024)
     }
 
-    // Fix LOGIC-04: Long arithmetic prevents potential overflow
-    // Fix PERF-01: accepts pre-computed availableMemMb instead of calling getSystemService
     private fun calculateSafeScale(pageWidth: Int, pageHeight: Int, availableMemMb: Long): Float {
         val desiredScale = when {
             availableMemMb < 128 -> 0.75f
@@ -884,175 +912,21 @@ class MainActivity : AppCompatActivity() {
             availableMemMb < 512 -> 1.5f
             else -> 2.0f
         }
-        val maxPixels = 50L * 1024L * 1024L / 4L  // Fix LOGIC-04: Long literals
+        val maxPixels = 50L * 1024L * 1024L / 4L
         val maxScale = Math.sqrt(maxPixels.toDouble() / (pageWidth.toLong() * pageHeight)).toFloat()
         return minOf(desiredScale, maxScale).coerceAtLeast(0.5f)
     }
 
-    private fun startRamMonitor() {
-        ramUpdateJob?.cancel()
-        ramUpdateJob = lifecycleScope.launch {
-            val am = getSystemService(ACTIVITY_SERVICE) as ActivityManager
-            val mi = ActivityManager.MemoryInfo()
-            binding.ramProgressBar.visibility = View.VISIBLE
-            binding.ramText.visibility = View.VISIBLE
-            while (true) {
-                am.getMemoryInfo(mi)
-                val totalMb = mi.totalMem / (1024 * 1024)
-                val availMb = mi.availMem / (1024 * 1024)
-                val usedMb = totalMb - availMb
-                val percent = ((usedMb * 100L) / totalMb).toInt()
-                binding.ramProgressBar.progress = percent
-                binding.ramText.text = getString(R.string.ram_usage_text, percent, availMb.toInt())
-                kotlinx.coroutines.delay(1000L)
-            }
-        }
-    }
-
-    private fun stopRamMonitor() {
-        ramUpdateJob?.cancel()
-        ramUpdateJob = null
-        binding.ramProgressBar.visibility = View.GONE
-        binding.ramText.visibility = View.GONE
-    }
-
-    private fun runBenchmark() {
-        if (!isEngineReady) {
-            Toast.makeText(this, getString(R.string.benchmark_engine_not_ready), Toast.LENGTH_SHORT).show()
-            return
-        }
-        binding.statusText.text = getString(R.string.status_benchmark_running)
-        lifecycleScope.launch {
-            val bitmap = Bitmap.createBitmap(224, 224, Bitmap.Config.RGB_565)
-            val result = withContext(Dispatchers.IO) { ocrEngine.processImage(bitmap) }
-            bitmap.recycle()
-            result.onSuccess { ocrResult ->
-                binding.statusText.text = if (ocrResult.tokensPerSecond != null) {
-                    getString(R.string.status_benchmark_result, ocrResult.tokensPerSecond)
-                } else {
-                    getString(R.string.status_benchmark_no_timing)
-                }
-            }
-            result.onFailure {
-                binding.statusText.text = getString(R.string.status_benchmark_failed)
-            }
-        }
-    }
-
-    // Fix UI-01: Only hide btnShare when processing STARTS, not when it ends
-    // Fix UI-02: Reset fileInfoText visibility on processing start
-    private fun setProcessingState(processing: Boolean) {
-        binding.progressBar.visibility = if (processing) View.VISIBLE else View.GONE
-        if (processing) startRamMonitor() else stopRamMonitor()
-
-        binding.btnSelectFile.isEnabled = !processing && isEngineReady
-        if (processing) {
-            binding.btnSelectFile.text = getString(R.string.status_initializing)
-        } else if (!isEngineReady) {
-            binding.btnSelectFile.text = getString(R.string.btn_select_file_disabled)
-        } else {
-            binding.btnSelectFile.text = getString(R.string.btn_select_file)
-        }
-
-        binding.btnCancel.visibility = if (processing) View.VISIBLE else View.GONE
-        if (processing) {
-            binding.btnShare.visibility = View.GONE
-            binding.btnPreview.visibility = View.GONE
-            binding.btnSaveToDevice.visibility = View.GONE
-            binding.fileInfoText.visibility = View.GONE
-
-            // Animate statusIcon — rotate while processing
-            binding.statusIcon.setImageResource(R.drawable.ic_document)
-            binding.statusIcon.imageTintList =
-                android.content.res.ColorStateList.valueOf(
-                    com.google.android.material.color.MaterialColors.getColor(
-                        binding.statusIcon, com.google.android.material.R.attr.colorPrimary
-                    )
-                )
-            binding.statusIcon.scaleType = android.widget.ImageView.ScaleType.FIT_CENTER
-            iconAnimator?.cancel()
-            iconAnimator = ObjectAnimator.ofFloat(binding.statusIcon, "rotation", 0f, 360f).apply {
-                duration = 1800
-                repeatCount = ObjectAnimator.INFINITE
-                interpolator = LinearInterpolator()
-                start()
-            }
-        } else {
-            // Stop animation and restore thumbnail or document icon
-            iconAnimator?.cancel()
-            iconAnimator = null
-            binding.statusIcon.rotation = 0f
-            val thumb = lastThumbnail
-            if (thumb != null) {
-                binding.statusIcon.imageTintList = null
-                binding.statusIcon.scaleType = android.widget.ImageView.ScaleType.CENTER_CROP
-                binding.statusIcon.setImageBitmap(thumb)
-            } else {
-                binding.statusIcon.setImageResource(R.drawable.ic_document)
-                binding.statusIcon.imageTintList =
-                    android.content.res.ColorStateList.valueOf(
-                        com.google.android.material.color.MaterialColors.getColor(
-                            binding.statusIcon, com.google.android.material.R.attr.colorPrimary
-                        )
-                    )
-                binding.statusIcon.scaleType = android.widget.ImageView.ScaleType.FIT_CENTER
-            }
-        }
-    }
-
-    private fun showTextPreview() {
-        val scrollView = android.widget.ScrollView(this)
-        val textView = android.widget.TextView(this).apply {
-            text = lastExtractedText
-            setPadding(48, 48, 48, 48)
-            setTextIsSelectable(true)
-        }
-        scrollView.addView(textView)
-
-        AlertDialog.Builder(this)
-            .setTitle(getString(R.string.preview_title))
-            .setView(scrollView)
-            .setPositiveButton(android.R.string.ok, null)
-            .show()
-    }
-
-    private fun resetToReadyState() {
-        setProcessingState(false)
-        binding.statusText.text = getString(R.string.status_engine_ready)
-    }
-
-    private fun setProgressIndeterminate(indeterminate: Boolean) {
-        binding.progressBar.apply {
-            visibility = View.VISIBLE
-            isIndeterminate = indeterminate
-        }
-    }
-
-    private fun shareFile(file: File) {
-        try {
-            val uri = FileProvider.getUriForFile(
-                this, "${applicationContext.packageName}.fileprovider", file
-            )
-            val shareIntent = Intent(Intent.ACTION_SEND).apply {
-                type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                putExtra(Intent.EXTRA_STREAM, uri)
-                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            }
-            startActivity(Intent.createChooser(shareIntent, getString(R.string.share_document_chooser)))
+    private fun getFileSizeMb(uri: Uri): Float {
+        return try {
+            contentResolver.openFileDescriptor(uri, "r")?.use { fd ->
+                fd.statSize / (1024f * 1024f)
+            } ?: 0f
         } catch (e: Exception) {
-            Log.w(TAG, "Share failed", e)
-            Toast.makeText(this, getString(R.string.error_share_failed), Toast.LENGTH_SHORT).show()
+            0f
         }
     }
 
-    private fun sanitizeFileName(name: String): String {
-        return name.replace(Regex("[^\\p{L}\\p{N}._\\-\\s]"), "_")
-            .replace(Regex("\\s+"), "_")
-            .take(100)
-            .ifEmpty { "document" }
-    }
-
-    // Fix LOGIC-05: Use generic localized message instead of raw exception text
     private fun getUserFriendlyError(e: Exception): String {
         return when {
             e is java.net.UnknownHostException -> getString(R.string.error_network)
@@ -1065,8 +939,7 @@ class MainActivity : AppCompatActivity() {
                 e.message ?: getString(R.string.error_image_too_large, "unknown", MAX_IMAGE_PIXELS / 1000000)
             e.message?.contains("storage", ignoreCase = true) == true ->
                 getString(R.string.error_insufficient_storage)
-            // Fix LOGIC-05: don't expose raw internal exception messages
-            else -> getString(R.string.error_unknown)
+            else -> e.message ?: getString(R.string.error_unknown)
         }
     }
 
@@ -1085,15 +958,31 @@ class MainActivity : AppCompatActivity() {
             }
         }
         if (result == null) {
-            try {
-                result = uri.path?.let { Uri.decode(it) }
-            } catch (e: Exception) {
-                result = uri.path
-            }
+            result = try { uri.path?.let { Uri.decode(it) } } catch (e: Exception) { uri.path }
             val cut = result?.lastIndexOf('/') ?: -1
             if (cut != -1) result = result?.substring(cut + 1)
         }
         return result ?: "document"
+    }
+
+    private fun runBenchmark() {
+        if (!isEngineReady) {
+            Toast.makeText(this, getString(R.string.benchmark_engine_not_ready), Toast.LENGTH_SHORT).show()
+            return
+        }
+        Toast.makeText(this, getString(R.string.status_benchmark_running), Toast.LENGTH_SHORT).show()
+        lifecycleScope.launch {
+            val bitmap = Bitmap.createBitmap(224, 224, Bitmap.Config.RGB_565)
+            try {
+                var sec: Double? = null
+                ocrEngine.processImageStreaming(bitmap, 1536)
+                    .onCompletion { bitmap.recycle() }
+                    .collect { t -> if (t is OcrEngine.StreamToken.Done) sec = t.tokPerSec }
+                Toast.makeText(this@MainActivity, "Benchmark: $sec tok/s", Toast.LENGTH_LONG).show()
+            } catch (e: Exception) {
+                Toast.makeText(this@MainActivity, "Benchmark failed", Toast.LENGTH_LONG).show()
+            }
+        }
     }
 
     override fun onDestroy() {
@@ -1101,7 +990,6 @@ class MainActivity : AppCompatActivity() {
         processingJob?.cancel()
         engineLoadingJob?.cancel()
         downloadJob?.cancel()
-        ramUpdateJob?.cancel()
         if (isFinishing) {
             llamaServerManager.stopServer()
         }

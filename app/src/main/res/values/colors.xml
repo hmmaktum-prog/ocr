@@ -8,7 +8,10 @@
     <color name="colorPrimaryContainer">#E0E0FF</color>
     <color name="colorOnPrimaryContainer">#1A1A5C</color>
     <color name="colorSecondary">#E6E6FA</color>
-    <!-- Fix UI-16: Darkened for WCAG AA contrast ratio (~7:1 vs previous ~2.8:1) -->
     <color name="colorOnSecondary">#1A1A6B</color>
+    
+    <color name="colorSecondaryContainer">#F3F3FA</color>
+    <color name="colorOnSecondaryContainer">#1E1E1E</color>
+    
     <color name="colorError">#B3261E</color>
 </resources>

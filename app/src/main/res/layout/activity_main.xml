@@ -1,199 +1,147 @@
 <?xml version="1.0" encoding="utf-8"?>
-<androidx.coordinatorlayout.widget.CoordinatorLayout 
+<androidx.coordinatorlayout.widget.CoordinatorLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    tools:context=".MainActivity">
+    android:fitsSystemWindows="true">
 
     <com.google.android.material.appbar.AppBarLayout
+        android:id="@+id/appBarLayout"
         android:layout_width="match_parent"
         android:layout_height="wrap_content">
-
         <com.google.android.material.appbar.MaterialToolbar
-            android:id="@+id/toolbar"
+            android:id="@+id/topAppBar"
+            style="@style/Widget.Material3.Toolbar.Surface"
             android:layout_width="match_parent"
             android:layout_height="?attr/actionBarSize"
             app:title="@string/app_name"
-            app:titleCentered="true"
-            app:titleTextColor="?attr/colorOnSurface"
-            app:menu="@menu/menu_main"/>
-    </com.google.android.material.appbar.AppBarLayout>
-
-    <androidx.constraintlayout.widget.ConstraintLayout
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        app:layout_behavior="@string/appbar_scrolling_view_behavior"
-        android:padding="24dp">
-
-        <com.google.android.material.card.MaterialCardView
-            android:id="@+id/statusCard"
-            android:layout_width="match_parent"
-            android:layout_height="0dp"
-            app:cardElevation="0dp"
-            app:strokeWidth="1dp"
-            app:strokeColor="?attr/colorOutlineVariant"
-            app:cardBackgroundColor="?attr/colorPrimaryContainer"
-            app:layout_constraintTop_toTopOf="parent"
-            app:layout_constraintBottom_toTopOf="@id/buttonContainer"
-            app:layout_constraintHeight_min="120dp"
-            android:layout_marginBottom="24dp">
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="match_parent"
-                android:orientation="vertical"
-                android:gravity="center"
-                android:padding="24dp">
-
-                <ImageView
-                    android:id="@+id/statusIcon"
-                    android:layout_width="80dp"
-                    android:layout_height="80dp"
-                    android:src="@drawable/ic_document"
-                    app:tint="?attr/colorPrimary"
-                    android:contentDescription="@string/app_name"
-                    android:importantForAccessibility="yes"
-                    android:layout_marginBottom="16dp"/>
-
-                <!-- Fix UI-09: Material3 LinearProgressIndicator instead of old ProgressBar style -->
-                <com.google.android.material.progressindicator.LinearProgressIndicator
-                    android:id="@+id/progressBar"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:max="100"
-                    android:progress="0"
-                    android:indeterminate="true"
-                    android:visibility="gone"
-                    android:layout_marginBottom="6dp" />
-
-                <!-- RAM usage indicator — visible during OCR processing -->
-                <com.google.android.material.progressindicator.LinearProgressIndicator
-                    android:id="@+id/ramProgressBar"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:max="100"
-                    android:progress="0"
-                    android:visibility="gone"
-                    app:indicatorColor="?attr/colorTertiary"
-                    android:layout_marginBottom="2dp" />
-
-                <TextView
-                    android:id="@+id/ramText"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:textAlignment="center"
-                    android:textSize="11sp"
-                    android:textColor="?attr/colorOnPrimaryContainer"
-                    android:alpha="0.7"
-                    android:visibility="gone"
-                    android:layout_marginBottom="10dp" />
-
-                <TextView
-                    android:id="@+id/fileInfoText"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:textAlignment="center"
-                    android:textSize="14sp"
-                    android:textStyle="bold"
-                    android:textColor="?attr/colorOnPrimaryContainer"
-                    android:visibility="gone"
-                    android:layout_marginBottom="8dp" />
-
-                <ScrollView
-                    android:id="@+id/statusScrollView"
-                    android:layout_width="match_parent"
-                    android:layout_height="0dp"
-                    android:layout_weight="1">
-                    
-                    <TextView
-                        android:id="@+id/statusText"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:text="@string/status_initializing"
-                        android:textAlignment="center"
-                        android:textSize="14sp"
-                        android:textColor="?attr/colorOnPrimaryContainer"
-                        android:textIsSelectable="true" />
-                </ScrollView>
-            </LinearLayout>
-        </com.google.android.material.card.MaterialCardView>
-
-        <LinearLayout
-            android:id="@+id/buttonContainer"
+            app:subtitle="Ready" />
+        <com.google.android.material.progressindicator.LinearProgressIndicator
+            android:id="@+id/mainProgressIndicator"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:gravity="center"
-            app:layout_constraintBottom_toBottomOf="parent">
+            android:visibility="gone"
+            app:indicatorColor="?attr/colorPrimary" />
+    </com.google.android.material.appbar.AppBarLayout>
 
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btnDownload"
-                android:layout_width="match_parent"
-                android:layout_height="56dp"
-                android:layout_marginTop="8dp"
-                android:text="@string/btn_download_model" />
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/chatRecyclerView"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:clipToPadding="false"
+        android:paddingTop="16dp"
+        android:paddingBottom="100dp"
+        app:layout_behavior="@string/appbar_scrolling_view_behavior" />
 
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btnSelectFile"
-                android:layout_width="match_parent"
-                android:layout_height="56dp"
-                android:enabled="false"
-                app:icon="@drawable/ic_upload_file"
-                app:iconGravity="textStart"
-                android:textSize="16sp"
-                android:text="@string/btn_select_file" />
+    <LinearLayout
+        android:id="@+id/emptyStateLayout"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:gravity="center"
+        android:orientation="vertical"
+        android:padding="32dp"
+        android:visibility="gone">
 
-            <LinearLayout
-                android:layout_width="match_parent"
+        <ImageView
+            android:layout_width="120dp"
+            android:layout_height="120dp"
+            android:src="@drawable/splash_icon"
+            android:alpha="0.2"
+            android:layout_marginBottom="24dp"
+            app:tint="?attr/colorOnSurface"/>
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="OCR Scanner"
+            android:textAppearance="?attr/textAppearanceHeadlineMedium"
+            android:layout_marginBottom="8dp"/>
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="To get started, tap the + below to add an image or PDF."
+            android:textAlignment="center"
+            android:textAppearance="?attr/textAppearanceBodyMedium"
+            android:textColor="?attr/colorOnSurfaceVariant"/>
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/downloadModelButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="24dp"
+            android:text="@string/btn_download_model"
+            android:visibility="gone" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/startEngineButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="24dp"
+            android:text="@string/btn_initialize_engine"
+            android:visibility="gone" />
+
+    </LinearLayout>
+
+    <!-- Bottom Command Bar -->
+    <com.google.android.material.card.MaterialCardView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom"
+        android:layout_margin="16dp"
+        app:cardCornerRadius="28dp"
+        app:cardElevation="2dp"
+        style="@style/Widget.Material3.CardView.Elevated">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:padding="8dp">
+
+            <ImageButton
+                android:id="@+id/addFileButton"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:src="@drawable/ic_add_file"
+                android:scaleType="centerInside"
+                android:contentDescription="Add File" />
+
+            <com.google.android.material.chip.Chip
+                android:id="@+id/qualityChip"
+                android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:gravity="center"
-                android:layout_marginTop="16dp">
+                android:text="Fast"
+                android:layout_marginStart="8dp"
+                app:chipIcon="@drawable/ic_benchmark"
+                app:chipIconSize="16dp" />
 
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btnCancel"
-                    style="@style/Widget.Material3.Button.OutlinedButton"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    app:icon="@drawable/ic_cancel"
-                    android:layout_marginEnd="8dp"
-                    android:text="@string/btn_cancel"
-                    android:visibility="gone" />
+            <TextView
+                android:id="@+id/chatInputHint"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Select an image or PDF..."
+                android:textAppearance="?attr/textAppearanceBodyLarge"
+                android:textColor="?attr/colorOnSurfaceVariant"
+                android:paddingStart="12dp" />
 
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btnShare"
-                    style="@style/Widget.Material3.Button.TonalButton"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    app:icon="@drawable/ic_share"
-                    android:layout_marginStart="8dp"
-                    android:layout_marginEnd="8dp"
-                    android:text="@string/btn_share"
-                    android:visibility="gone" />
+            <ImageButton
+                android:id="@+id/cancelButton"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:src="@drawable/ic_cancel"
+                android:scaleType="centerInside"
+                android:visibility="gone"
+                android:contentDescription="@string/btn_cancel" />
 
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btnSaveToDevice"
-                    style="@style/Widget.Material3.Button.TonalButton"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    app:icon="@drawable/ic_save"
-                    android:layout_marginStart="8dp"
-                    android:layout_marginEnd="8dp"
-                    android:text="@string/btn_save_to_device"
-                    android:visibility="gone" />
-
-                <!-- Fix USE-07: In-app text preview -->
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btnPreview"
-                    style="@style/Widget.Material3.Button.TextButton"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    app:icon="@drawable/ic_document"
-                    android:text="@string/btn_preview"
-                    android:visibility="gone" />
-            </LinearLayout>
         </LinearLayout>
-    </androidx.constraintlayout.widget.ConstraintLayout>
+    </com.google.android.material.card.MaterialCardView>
+
 </androidx.coordinatorlayout.widget.CoordinatorLayout>

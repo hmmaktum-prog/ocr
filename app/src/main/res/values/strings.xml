@@ -159,6 +159,12 @@
     <string name="dialog_download_confirm_message">This will download the OCR model files. Total download size may be several hundred MB.\n\nMake sure you are on Wi-Fi.</string>
     <string name="dialog_download_start">Download</string>
 
+    <string name="mode_fast">⚡ Fast</string>
+    <string name="mode_hq">🔍 High Quality</string>
+    <string name="action_copy">Copy</string>
+    <string name="action_save_export">Export PDF/Docx</string>
+    <string name="state_thinking">Thinking...</string>
+
     <!-- Misc -->
     <string name="progress_description">Processing progress</string>
     <string name="file_info">File: <xliff:g xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2" id="name">%1$s</xliff:g></string>

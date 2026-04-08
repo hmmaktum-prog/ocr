@@ -3,6 +3,8 @@ package com.example.ocr
 import android.graphics.Bitmap
 import android.util.Log
 import android.util.Base64
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
@@ -30,12 +32,33 @@ class OcrEngine {
         val tokensPerSecond: Double?
     )
 
+    sealed class StreamToken {
+        data class Thinking(val elapsed: Long) : StreamToken()
+        data class Text(val content: String) : StreamToken()
+        data class Done(val fullText: String, val tokPerSec: Double?) : StreamToken()
+        data class Error(val message: String) : StreamToken()
+    }
+
+    private fun downscaleForOcr(bitmap: Bitmap, maxDimension: Int): Bitmap {
+        val width = bitmap.width
+        val height = bitmap.height
+        if (width <= maxDimension && height <= maxDimension) return bitmap
+
+        val scale = maxDimension.toFloat() / maxOf(width, height)
+        val newWidth = (width * scale).toInt()
+        val newHeight = (height * scale).toInt()
+        return Bitmap.createScaledBitmap(bitmap, newWidth, newHeight, true)
+    }
+
     suspend fun processImage(bitmap: Bitmap): Result<OcrResult> {
+        var resized: Bitmap? = null
         return try {
+            resized = downscaleForOcr(bitmap, 1536)
             val outputStream = ByteArrayOutputStream()
-            bitmap.compress(Bitmap.CompressFormat.JPEG, 80, outputStream)
-            val base64Image = Base64.encodeToString(outputStream.toByteArray(), Base64.NO_WRAP)
-            outputStream.reset() // GC চাপ কমাতে buffer clear করো
+            val base64Out = android.util.Base64OutputStream(outputStream, Base64.NO_WRAP)
+            resized.compress(Bitmap.CompressFormat.JPEG, 90, base64Out)
+            base64Out.close()
+            val base64Image = outputStream.toString("UTF-8")
 
             val jsonBody = JSONObject().apply {
                 put("prompt", "Analyze the image and transcribe all the text found inside it:\n[img-1]")
@@ -61,7 +84,7 @@ class OcrEngine {
             var attempt = 0
             while (attempt <= 2) {
                 try {
-                    client.newCall(request).execute().use { response ->
+                    HttpClientProvider.ocrClient.newCall(request).execute().use { response ->
                         if (!response.isSuccessful) {
                             if (response.code in listOf(429, 503) && attempt < 2) {
                                 attempt++
@@ -74,6 +97,9 @@ class OcrEngine {
                         responseBody = response.body?.source()?.readUtf8(5_000_000) ?: ""
                     }
                     if (responseBody.isNotEmpty()) break
+                    attempt++
+                    if (attempt > 2) throw IOException("Server returned empty response after 3 attempts")
+                    kotlinx.coroutines.delay(1000L * attempt)
                 } catch (e: Exception) {
                     // Fix LOGIC-14: retry on SocketTimeoutException too (transient failure)
                     val isRetryable = attempt < 2 && (
@@ -116,6 +142,99 @@ class OcrEngine {
         } catch (e: Exception) {
             Log.e(TAG, "processImage failed", e)
             Result.failure(e)
+        } finally {
+            if (resized != null && resized != bitmap) {
+                resized.recycle()
+            }
+        }
+    }
+
+    fun processImageStreaming(bitmap: Bitmap, maxDimension: Int = 1536): Flow<StreamToken> = flow {
+        val startMs = System.currentTimeMillis()
+        emit(StreamToken.Thinking(0))
+        var resized: Bitmap? = null
+        try {
+            resized = downscaleForOcr(bitmap, maxDimension)
+            val outputStream = ByteArrayOutputStream()
+            val base64Out = android.util.Base64OutputStream(outputStream, Base64.NO_WRAP)
+            resized.compress(Bitmap.CompressFormat.JPEG, 90, base64Out)
+            base64Out.close()
+            val base64Image = outputStream.toString("UTF-8")
+
+            val jsonBody = JSONObject().apply {
+                put("prompt", "Analyze the image and transcribe all the text found inside it:\n[img-1]")
+                val imagesArray = JSONArray().apply {
+                    put(JSONObject().apply {
+                        put("data", base64Image)
+                        put("id", 1)
+                    })
+                }
+                put("image_data", imagesArray)
+                put("n_predict", 4096)
+                put("temperature", 0.1)
+                put("stream", true)
+            }
+
+            val requestBody = jsonBody.toString().toRequestBody("application/json".toMediaType())
+            val request = Request.Builder()
+                .url(LlamaServerManager.SERVER_URL)
+                .post(requestBody)
+                .addHeader("Accept", "text/event-stream")
+                .build()
+
+            HttpClientProvider.ocrClient.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) {
+                    emit(StreamToken.Error("Server returned HTTP ${response.code}"))
+                    return@use
+                }
+
+                val source = response.body?.source()
+                if (source == null) {
+                    emit(StreamToken.Error("Empty response body"))
+                    return@use
+                }
+
+                val fullText = java.lang.StringBuilder()
+                var tokensPerSecond: Double? = null
+
+                while (!source.exhausted()) {
+                    val line = source.readUtf8Line() ?: break
+                    if (line.startsWith("data: ")) {
+                        val text = line.substring(6).trim()
+                        if (text == "[DONE]") break
+                        if (text.isEmpty()) continue
+
+                        try {
+                            val json = JSONObject(text)
+                            if (json.has("error")) {
+                                emit(StreamToken.Error(json.optString("error")))
+                                return@use
+                            }
+                            val content = json.optString("content", "")
+                            if (content.isNotEmpty()) {
+                                fullText.append(content)
+                                emit(StreamToken.Text(content))
+                            }
+                            if (json.optBoolean("stop", false)) {
+                                tokensPerSecond = json.optJSONObject("timings")
+                                    ?.optDouble("predicted_per_second")
+                                    ?.takeIf { it.isFinite() && it > 0.0 }
+                            }
+                        } catch (e: JSONException) {
+                            Log.w(TAG, "Invalid SSE token JSON: $text")
+                        }
+                    }
+                }
+                emit(StreamToken.Done(fullText.toString().trim(), tokensPerSecond))
+            }
+        } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            Log.e(TAG, "Streaming OCR failed", e)
+            emit(StreamToken.Error(e.message ?: "Unknown error"))
+        } finally {
+            if (resized != null && resized != bitmap) {
+                resized.recycle()
+            }
         }
     }
 
