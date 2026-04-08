@@ -7,11 +7,9 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
-import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.File
 import java.io.IOException
-import java.util.concurrent.TimeUnit
 import kotlin.coroutines.coroutineContext
 
 class ModelDownloader(private val context: Context) {
@@ -65,7 +63,8 @@ class ModelDownloader(private val context: Context) {
                         val req = Request.Builder().url(urlStr).head().build()
                         downloadClient.newCall(req).execute().use { res ->
                             if (res.isSuccessful) {
-                                val size = res.body?.contentLength() ?: 0L
+                                // contentLength() returns -1 if server uses chunked encoding — treat as unknown (0)
+                                val size = res.body?.contentLength()?.takeIf { it > 0 } ?: 0L
                                 expectedSizes[urlStr] = size
                                 totalRequiredSpace += size
                             }
@@ -193,7 +192,10 @@ class ModelDownloader(private val context: Context) {
                 }
                 
                 val body = response.body ?: throw IOException("Empty response body")
-                val originalContentLength = body.contentLength()
+                // contentLength() returns -1 if unknown (chunked encoding) — treat as 0 (skip exact-size check)
+                val originalContentLength = body.contentLength().takeIf { it > 0 } ?: 0L
+                // For partial (206) response: total file size = already downloaded + remaining content
+                // For full (200) response: total file size = content length
                 val fileLength = if (isPartial && originalContentLength > 0) startIndex + originalContentLength else originalContentLength
                 
                 val fileProgressBase = (fileIndex * 100) / totalFiles

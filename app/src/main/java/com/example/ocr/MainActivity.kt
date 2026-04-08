@@ -410,8 +410,14 @@ class MainActivity : AppCompatActivity() {
         val modelDir = getModelsDir()
         val mainModel = File(modelDir, ModelDownloader.MAIN_MODEL_FILE)
         val mmproj = File(modelDir, ModelDownloader.MMPROJ_FILE)
-        return mainModel.exists() && mainModel.length() > 0L &&
-               mmproj.exists() && mmproj.length() > 0L
+        // শুধু existence নয়, minimum size-ও যাচাই করো।
+        // আংশিক download হলে llama-server crash করে — তাই strict validation।
+        // Main model: PaddleOCR-VL-1.5.gguf ≈ 1.5–2GB → কমপক্ষে 100MB হতে হবে
+        // mmproj: PaddleOCR-VL-1.5-mmproj.gguf ≈ 200–500MB → কমপক্ষে 10MB হতে হবে
+        val mainModelMinBytes = 100L * 1024 * 1024   // 100 MB
+        val mmprojMinBytes    = 10L  * 1024 * 1024   // 10 MB
+        return mainModel.exists() && mainModel.length() >= mainModelMinBytes &&
+               mmproj.exists()    && mmproj.length()    >= mmprojMinBytes
     }
 
     private fun initEngine() {
