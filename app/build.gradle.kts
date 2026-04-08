@@ -25,23 +25,27 @@ android {
             val keyAlias = System.getenv("KEY_ALIAS")
             val keyPass = System.getenv("KEY_PASSWORD")
 
-            if (keystorePath != null && keystorePass != null && keyAlias != null && keyPass != null) {
+            if (!keystorePath.isNullOrBlank() && !keystorePass.isNullOrBlank()
+                    && !keyAlias.isNullOrBlank() && !keyPass.isNullOrBlank()) {
                 storeFile = file(keystorePath)
                 storePassword = keystorePass
                 this.keyAlias = keyAlias
                 keyPassword = keyPass
+                println("INFO: Release signing configured with keystore: $keystorePath")
             } else {
-                // Fix LOGIC-20: Warn loudly instead of silently skipping signing
-                println("WARNING: Release signing config is incomplete. " +
+                println("WARNING: Release signing not configured. " +
                     "Set KEYSTORE_PATH, KEYSTORE_PASSWORD, KEY_ALIAS, KEY_PASSWORD " +
-                    "environment variables. Build will be unsigned!")
+                    "to produce a signed APK.")
             }
         }
     }
 
     buildTypes {
         release {
-            signingConfig = signingConfigs.getByName("release")
+            val hasKeystore = !System.getenv("KEYSTORE_PATH").isNullOrBlank()
+            if (hasKeystore) {
+                signingConfig = signingConfigs.getByName("release")
+            }
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
@@ -74,17 +78,12 @@ dependencies {
     implementation("com.google.android.material:material:1.12.0")
     implementation("androidx.constraintlayout:constraintlayout:2.2.1")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
-    // Fix LOGIC-21: lifecycle-viewmodel-ktx removed — ViewModel pattern not used
     implementation("androidx.activity:activity-ktx:1.10.1")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
 
-    // Networking for Llama API
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
-    
-    // Image rotation fix
     implementation("androidx.exifinterface:exifinterface:1.3.7")
 
-    // Fix LOGIC-22: Test dependencies
     testImplementation("junit:junit:4.13.2")
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
     androidTestImplementation("androidx.test.espresso:espresso-core:3.6.1")

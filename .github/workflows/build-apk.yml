@@ -11,21 +11,21 @@ on:
 
 env:
   LLAMA_CPP_TAG: b8683
-  BINARY_RELEASE_TAG: llama-android-arm64-b8683-vulkan-static
+  BINARY_RELEASE_TAG: llama-android-arm64-b8683-static
 
 jobs:
   build:
-    name: Build & Test
+    name: Build & Sign
     runs-on: ubuntu-latest
     permissions:
       contents: write
 
     steps:
-      # ── 1. সোর্স কোড নামানো ───────────────────────────────────────
+      # ── 1. Source code checkout ────────────────────────────────────
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # ── 2. Java 17 সেটআপ (Gradle cache সহ) ────────────────────────
+      # ── 2. JDK 17 setup ────────────────────────────────────────────
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
@@ -33,7 +33,7 @@ jobs:
           distribution: 'temurin'
           cache: gradle
 
-      # ── 3. Android SDK পাথ সেট করা ────────────────────────────────
+      # ── 3. Android SDK path ─────────────────────────────────────────
       - name: Create local.properties
         run: echo "sdk.dir=$ANDROID_HOME" > local.properties
 
@@ -41,114 +41,112 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
-      # ── 5. Gradle wrapper যাচাই ─────────────────────────────────────
+      # ── 5. Gradle wrapper validation ────────────────────────────────
       - name: Validate Gradle wrapper
         uses: gradle/actions/wrapper-validation@v4
 
-      # ── 6. Gradle memory & daemon settings ──────────────────────────
+      # ── 6. Gradle JVM memory settings ──────────────────────────────
       - name: Configure Gradle JVM memory
         run: |
           mkdir -p ~/.gradle
-          cat >> ~/.gradle/gradle.properties << 'EOF'
-          org.gradle.jvmargs=-Xmx4g -XX:MaxMetaspaceSize=512m -XX:+HeapDumpOnOutOfMemoryError
-          org.gradle.daemon=false
-          org.gradle.parallel=true
-          org.gradle.caching=true
-          EOF
+          cat > ~/.gradle/gradle.properties << 'GRADLE_EOF'
+org.gradle.jvmargs=-Xmx4g -XX:MaxMetaspaceSize=512m -XX:+HeapDumpOnOutOfMemoryError
+org.gradle.daemon=false
+org.gradle.parallel=true
+org.gradle.caching=true
+GRADLE_EOF
 
-      # ═══════════════════════════════════════════════════════════════
-      # Keystore সেটআপ (GitHub Secrets থেকে)
-      # ═══════════════════════════════════════════════════════════════
+      # ══════════════════════════════════════════════════════════════
+      # Keystore setup (GitHub Secrets থেকে)
+      # ══════════════════════════════════════════════════════════════
 
-      # ── 7. Keystore decode & সেটআপ ────────────────────────────────
+      # ── 7. Keystore decode ─────────────────────────────────────────
       - name: Setup release keystore
         run: |
           if [ -n "${{ secrets.KEYSTORE_BASE64 }}" ]; then
             echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > /tmp/paddleocr-release.jks
             if [ -s /tmp/paddleocr-release.jks ]; then
-              echo "✅ Keystore ready: $(ls -lh /tmp/paddleocr-release.jks)"
+              echo "Keystore ready: $(ls -lh /tmp/paddleocr-release.jks)"
               echo "KEYSTORE_PATH=/tmp/paddleocr-release.jks" >> $GITHUB_ENV
               echo "KEYSTORE_PASSWORD=${{ secrets.KEYSTORE_PASSWORD }}" >> $GITHUB_ENV
               echo "KEY_ALIAS=${{ secrets.KEY_ALIAS }}" >> $GITHUB_ENV
               echo "KEY_PASSWORD=${{ secrets.KEY_PASSWORD }}" >> $GITHUB_ENV
             else
-              echo "⚠️ Keystore decode failed (empty file). Release APK will be unsigned."
+              echo "WARNING: Keystore decode failed (empty file). Release APK will be unsigned."
             fi
           else
-            echo "⚠️ KEYSTORE_BASE64 secret not set. Release APK will be unsigned."
+            echo "WARNING: KEYSTORE_BASE64 secret not set. Release APK will be unsigned."
           fi
 
-      # ═══════════════════════════════════════════════════════════════
-      # llama-server binary: GitHub Release থেকে download, নইলে build
-      # ═══════════════════════════════════════════════════════════════
+      # ══════════════════════════════════════════════════════════════
+      # llama-server binary: নিজের Release থেকে download, না পেলে build
+      # ══════════════════════════════════════════════════════════════
 
-      # ── 8. GitHub Release থেকে prebuilt binary download চেষ্টা ────
-      - name: Try download prebuilt llama-server from GitHub Release
+      # ── 8. Prebuilt binary download চেষ্টা ────────────────────────
+      - name: Try download prebuilt llama-server from release
         id: binary-download
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          echo "Checking GitHub Release: $BINARY_RELEASE_TAG"
+          echo "Checking release tag: $BINARY_RELEASE_TAG"
           if gh release download "$BINARY_RELEASE_TAG" \
             --repo "${{ github.repository }}" \
             --pattern "llama-server-arm64" \
             --dir /tmp/ 2>/dev/null; then
             mv /tmp/llama-server-arm64 /tmp/llama-server-bin
+            chmod +x /tmp/llama-server-bin
             echo "BINARY_FROM_RELEASE=true" >> $GITHUB_ENV
-            echo "✅ Prebuilt binary downloaded from release $BINARY_RELEASE_TAG"
+            echo "Prebuilt binary downloaded from release $BINARY_RELEASE_TAG"
             ls -lh /tmp/llama-server-bin
-            file /tmp/llama-server-bin
+            file /tmp/llama-server-bin || true
           else
             echo "BINARY_FROM_RELEASE=false" >> $GITHUB_ENV
-            echo "ℹ️ No prebuilt binary found — will build from source"
+            echo "No prebuilt binary found — will build from source (~15 min)"
           fi
 
-      # ── 9. NDK পাথ নির্ধারণ (build দরকার হলে) ─────────────────────
+      # ── 9. NDK path detection ──────────────────────────────────────
       - name: Detect Android NDK path
         if: env.BINARY_FROM_RELEASE != 'true'
         run: |
           if [ -n "$ANDROID_NDK_LATEST_HOME" ] && [ -d "$ANDROID_NDK_LATEST_HOME" ]; then
             echo "NDK_PATH=$ANDROID_NDK_LATEST_HOME" >> $GITHUB_ENV
-            echo "✅ NDK found at ANDROID_NDK_LATEST_HOME: $ANDROID_NDK_LATEST_HOME"
+            echo "NDK found: $ANDROID_NDK_LATEST_HOME"
           elif [ -n "$ANDROID_NDK_HOME" ] && [ -d "$ANDROID_NDK_HOME" ]; then
             echo "NDK_PATH=$ANDROID_NDK_HOME" >> $GITHUB_ENV
-            echo "✅ NDK found at ANDROID_NDK_HOME: $ANDROID_NDK_HOME"
+            echo "NDK found: $ANDROID_NDK_HOME"
           elif [ -n "$ANDROID_NDK" ] && [ -d "$ANDROID_NDK" ]; then
             echo "NDK_PATH=$ANDROID_NDK" >> $GITHUB_ENV
-            echo "✅ NDK found at ANDROID_NDK: $ANDROID_NDK"
+            echo "NDK found: $ANDROID_NDK"
           else
             NDK_DIR=$(ls -d "$ANDROID_HOME/ndk/"* 2>/dev/null | sort -V | tail -1)
             if [ -n "$NDK_DIR" ] && [ -d "$NDK_DIR" ]; then
               echo "NDK_PATH=$NDK_DIR" >> $GITHUB_ENV
-              echo "✅ NDK found in ndk/ dir: $NDK_DIR"
+              echo "NDK found in ndk/ dir: $NDK_DIR"
             else
-              echo "📦 Installing NDK 26.3.11579264..."
-              SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
-              if [ ! -f "$SDKMANAGER" ]; then
-                SDKMANAGER=$(find "$ANDROID_HOME/cmdline-tools" -name "sdkmanager" 2>/dev/null | head -1)
-              fi
+              echo "Installing NDK 26.3.11579264..."
+              SDKMANAGER=$(find "$ANDROID_HOME/cmdline-tools" -name "sdkmanager" 2>/dev/null | head -1)
               "$SDKMANAGER" "ndk;26.3.11579264" > /dev/null
               echo "NDK_PATH=$ANDROID_HOME/ndk/26.3.11579264" >> $GITHUB_ENV
-              echo "✅ NDK 26.3.11579264 installed"
+              echo "NDK 26.3.11579264 installed"
             fi
           fi
 
-      # ── 10. Build dependencies (build দরকার হলে) ───────────────────
+      # ── 10. Build tools install ─────────────────────────────────────
       - name: Install CMake and Ninja
         if: env.BINARY_FROM_RELEASE != 'true'
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y cmake ninja-build
 
-      # ── 11. llama.cpp clone (build দরকার হলে) ───────────────────────
+      # ── 11. llama.cpp source clone ─────────────────────────────────
       - name: Clone llama.cpp source
         if: env.BINARY_FROM_RELEASE != 'true'
         run: |
           git clone --depth 1 --branch $LLAMA_CPP_TAG \
             https://github.com/ggerganov/llama.cpp.git /tmp/llama-cpp
-          echo "✅ Cloned llama.cpp $LLAMA_CPP_TAG"
+          echo "Cloned llama.cpp $LLAMA_CPP_TAG"
 
-      # ── 12. llama-server Android arm64 build (build দরকার হলে) ─────
+      # ── 12. llama-server cross-compile for Android arm64 ───────────
       - name: Build llama-server for Android arm64-v8a
         if: env.BINARY_FROM_RELEASE != 'true'
         run: |
@@ -164,25 +162,29 @@ jobs:
             -DLLAMA_CURL=OFF \
             -DGGML_NATIVE=OFF \
             -DGGML_OPENMP=OFF \
-            -DGGML_VULKAN=ON \
+            -DGGML_VULKAN=OFF \
             -DBUILD_SHARED_LIBS=OFF \
             -DCMAKE_BUILD_TYPE=Release
 
-          cmake --build /tmp/llama-build --target llama-server -j$(nproc) \
-            || cmake --build /tmp/llama-build -j$(nproc)
+          echo "Configured. Building llama-server target..."
+          cmake --build /tmp/llama-build --target llama-server -j$(nproc)
 
           SERVER_BIN=$(find /tmp/llama-build -type f -name "llama-server" \
             ! -path "*/CMakeFiles/*" | head -1)
+
           if [ -z "$SERVER_BIN" ]; then
-            echo "❌ llama-server binary not found after build!"
-            ls /tmp/llama-build/bin/ 2>/dev/null || true
+            echo "ERROR: llama-server not found! Checking build outputs..."
+            find /tmp/llama-build/bin/ -type f 2>/dev/null || true
+            find /tmp/llama-build -maxdepth 3 -type f -executable 2>/dev/null || true
             exit 1
           fi
+
+          chmod +x "$SERVER_BIN"
           cp "$SERVER_BIN" /tmp/llama-server-bin
-          echo "✅ Built: $(ls -lh /tmp/llama-server-bin)"
+          echo "Built successfully: $(ls -lh /tmp/llama-server-bin)"
           file /tmp/llama-server-bin
 
-      # ── 13. নতুন binary GitHub Release-এ upload করো ─────────────
+      # ── 13. Binary → GitHub Release (cache ভবিষ্যতের জন্য) ────────
       - name: Upload binary to GitHub Release (cache for future builds)
         if: env.BINARY_FROM_RELEASE != 'true'
         env:
@@ -190,8 +192,8 @@ jobs:
         run: |
           gh release create "$BINARY_RELEASE_TAG" \
             --repo "${{ github.repository }}" \
-            --title "llama-server Android arm64 ($LLAMA_CPP_TAG) [static]" \
-            --notes "Pre-built statically linked llama-server binary for Android arm64-v8a (API 28+). Built from llama.cpp $LLAMA_CPP_TAG with BUILD_SHARED_LIBS=OFF and GGML_VULKAN=ON." \
+            --title "llama-server Android arm64 ($LLAMA_CPP_TAG) [CPU-only static]" \
+            --notes "Pre-built statically linked llama-server binary for Android arm64-v8a (API 28+). Built from llama.cpp $LLAMA_CPP_TAG. CPU-only (no Vulkan), BUILD_SHARED_LIBS=OFF." \
             --prerelease 2>/dev/null || true
 
           gh release upload "$BINARY_RELEASE_TAG" \
@@ -199,21 +201,22 @@ jobs:
             --repo "${{ github.repository }}" \
             --clobber
 
-          echo "✅ Binary uploaded to release $BINARY_RELEASE_TAG"
+          echo "Binary uploaded to release: $BINARY_RELEASE_TAG"
 
-      # ── 14. Binary → jniLibs-এ রাখো ────────────────────────────────
-      - name: Embed llama-server into APK jniLibs
+      # ── 14. Binary → jniLibs-এ embed করো ─────────────────────────
+      - name: Embed llama-server into APK (jniLibs)
         run: |
           mkdir -p app/src/main/jniLibs/arm64-v8a
+          rm -f app/src/main/jniLibs/arm64-v8a/.gitkeep
           cp /tmp/llama-server-bin app/src/main/jniLibs/arm64-v8a/libllama_server.so
-          echo "✅ Embedded: $(ls -lh app/src/main/jniLibs/arm64-v8a/libllama_server.so)"
+          echo "Embedded: $(ls -lh app/src/main/jniLibs/arm64-v8a/libllama_server.so)"
           file app/src/main/jniLibs/arm64-v8a/libllama_server.so
 
-      # ═══════════════════════════════════════════════════════════════
+      # ══════════════════════════════════════════════════════════════
       # APK Build
-      # ═══════════════════════════════════════════════════════════════
+      # ══════════════════════════════════════════════════════════════
 
-      # ── 15. Lint চেক ────────────────────────────────────────────────
+      # ── 15. Lint check (warning only) ─────────────────────────────
       - name: Run Lint
         run: ./gradlew lintDebug --no-daemon
         continue-on-error: true
@@ -227,7 +230,7 @@ jobs:
           retention-days: 7
           if-no-files-found: ignore
 
-      # ── 16. Unit Test ───────────────────────────────────────────────
+      # ── 16. Unit tests ─────────────────────────────────────────────
       - name: Run Unit Tests
         run: ./gradlew testDebugUnitTest --no-daemon
         continue-on-error: true
@@ -241,7 +244,7 @@ jobs:
           retention-days: 7
           if-no-files-found: ignore
 
-      # ── 17. Debug APK ────────────────────────────────────────────────
+      # ── 17. Debug APK ──────────────────────────────────────────────
       - name: Build Debug APK
         env:
           BUILD_NUMBER: ${{ github.run_number }}
@@ -254,7 +257,7 @@ jobs:
           path: app/build/outputs/apk/debug/app-debug.apk
           retention-days: 30
 
-      # ── 18. Signed Release APK ────────────────────────────────────
+      # ── 18. Signed Release APK ─────────────────────────────────────
       - name: Build Signed Release APK
         env:
           BUILD_NUMBER: ${{ github.run_number }}
@@ -263,18 +266,17 @@ jobs:
       - name: Verify APK signing
         run: |
           APK="app/build/outputs/apk/release/app-release.apk"
+          UNSIGNED="app/build/outputs/apk/release/app-release-unsigned.apk"
           if [ -f "$APK" ]; then
-            echo "✅ Signed APK: $(ls -lh $APK)"
+            echo "Signed Release APK: $(ls -lh $APK)"
             BUILD_TOOLS=$(ls "$ANDROID_HOME/build-tools/" | sort -V | tail -1)
-            "$ANDROID_HOME/build-tools/$BUILD_TOOLS/apksigner" verify --verbose "$APK" 2>&1 | head -5 || true
+            "$ANDROID_HOME/build-tools/$BUILD_TOOLS/apksigner" verify --verbose "$APK" 2>&1 | head -10 || true
+          elif [ -f "$UNSIGNED" ]; then
+            echo "WARNING: Unsigned APK found — KEYSTORE secrets not configured: $(ls -lh $UNSIGNED)"
           else
-            UNSIGNED="app/build/outputs/apk/release/app-release-unsigned.apk"
-            if [ -f "$UNSIGNED" ]; then
-              echo "⚠️ Unsigned APK found (no keystore configured): $(ls -lh $UNSIGNED)"
-            else
-              echo "❌ No release APK found!"
-              ls app/build/outputs/apk/release/ 2>/dev/null || true
-            fi
+            echo "ERROR: No release APK found!"
+            ls app/build/outputs/apk/release/ 2>/dev/null || true
+            exit 1
           fi
 
       - name: Upload Release APK
@@ -287,9 +289,9 @@ jobs:
           retention-days: 30
           if-no-files-found: warn
 
-  # ══════════════════════════════════════════════════════════════════
-  # GitHub Release (tag push হলেই শুধু)
-  # ══════════════════════════════════════════════════════════════════
+  # ════════════════════════════════════════════════════════════════
+  # GitHub Release (শুধুমাত্র v* tag push হলে)
+  # ════════════════════════════════════════════════════════════════
   release:
     name: Create GitHub Release
     runs-on: ubuntu-latest
@@ -305,6 +307,12 @@ jobs:
           name: app-release-${{ github.run_number }}
           path: ./apk
 
+      - name: Download Debug APK artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: app-debug-${{ github.run_number }}
+          path: ./apk
+
       - name: List downloaded files
         run: ls -lh ./apk/ || echo "No files found"
 
@@ -315,19 +323,26 @@ jobs:
           files: |
             ./apk/app-release.apk
             ./apk/app-release-unsigned.apk
+            ./apk/app-debug.apk
           name: "PaddleOCR-VL ${{ github.ref_name }}"
           body: |
             ## PaddleOCR-VL ${{ github.ref_name }}
 
-            **llama-server**: llama.cpp ${{ env.LLAMA_CPP_TAG }} (Android arm64-v8a)
+            **llama-server**: llama.cpp b8683 (Android arm64-v8a, CPU-only static binary)
 
-            ### ডাউনলোড
+            ### ডাউনলোড করুন
             - **app-release.apk** — Signed APK (সরাসরি ইনস্টল করুন)
-            - **app-release-unsigned.apk** — Unsigned APK (Keystore ছাড়া বিল্ড)
+            - **app-release-unsigned.apk** — Unsigned APK (Keystore সেটআপ না থাকলে)
+            - **app-debug.apk** — Debug APK (টেস্টিং-এর জন্য)
+
+            ### ইনস্টল করার আগে
+            - ফোনে "Unknown sources" চালু করুন
+            - Settings → Security → Install unknown apps
 
             ### সমর্থিত ডিভাইস
-            - **আর্কিটেকচার**: arm64-v8a (সকল আধুনিক Android ফোন)
+            - **Architecture**: arm64-v8a (সকল আধুনিক Android ফোন)
             - **ন্যূনতম Android**: 9.0 (API 28)
+            - **RAM**: কমপক্ষে 4GB (8GB+ সুপারিশ)
           draft: false
           prerelease: false
           fail_on_unmatched_files: false

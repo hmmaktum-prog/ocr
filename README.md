@@ -91,9 +91,9 @@ push to main
 1. Keystore setup (GitHub Secret থেকে)
     │
     ▼
-2. llama-server binary
-    ├─ GitHub Release-এ আছে? → ডাউনলোড করো (~1 মিনিট)
-    └─ নেই? → Source থেকে build করো (~15 মিনিট) → Release-এ upload করো
+2. llama-server binary (arm64, static, CPU-only)
+    ├─ এই repo-র Release-এ আছে? → ডাউনলোড করো (~1 মিনিট)
+    └─ নেই? → Source থেকে build করো (~15-20 মিনিট) → Release-এ upload করো
     │
     ▼
 3. APK Build
@@ -157,8 +157,8 @@ ocr/
 │   │   ├── LlamaServerManager.kt    — llama-server চালু/বন্ধ
 │   │   ├── ModelDownloader.kt       — HuggingFace থেকে model download
 │   │   └── OcrEngine.kt             — HTTP দিয়ে OCR request
-│   ├── src/main/assets/
-│   │   └── llama-server             — Android arm64 binary (CI-তে যোগ হয়)
+│   ├── src/main/jniLibs/arm64-v8a/
+│   │   └── libllama_server.so       — Android arm64 binary (CI build-এ যোগ হয়)
 │   └── build.gradle.kts
 ├── .github/workflows/
 │   └── build-apk.yml                — CI/CD workflow
