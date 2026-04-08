@@ -28,6 +28,11 @@
     <string name="status_no_output">No text was extracted from the file.</string>
     <string name="status_processing_time">Processing… <xliff:g xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2" id="elapsed">%1$d</xliff:g>s elapsed</string>
     <string name="page_prefix">Page</string>
+    <!-- Background processing notification -->
+    <string name="notif_channel_name">OCR Processing</string>
+    <string name="notif_channel_desc">Shows when OCR is running in the background</string>
+    <string name="notif_processing_title">OCR in progress…</string>
+    <string name="notif_processing_text">Tap to return to the app</string>
     <!-- Buttons -->
     <string name="btn_select_file">Select PDF / Image</string>
     <string name="btn_select_file_disabled">Engine Not Ready</string>

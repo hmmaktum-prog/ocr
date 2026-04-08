@@ -1,12 +1,15 @@
 package com.example.ocr
 
+import android.Manifest
 import android.app.ActivityManager
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Matrix
 import android.graphics.pdf.PdfRenderer
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.provider.OpenableColumns
 import android.util.Log
@@ -16,6 +19,7 @@ import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.exifinterface.media.ExifInterface
@@ -63,6 +67,10 @@ class MainActivity : AppCompatActivity() {
         uri?.let { handleFileSelected(it) }
     }
 
+    private val notificationPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { /* granted or not — we proceed silently either way */ }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
         super.onCreate(savedInstanceState)
@@ -72,9 +80,32 @@ class MainActivity : AppCompatActivity() {
         downloader = ModelDownloader(this)
         llamaServerManager = LlamaServerManager(this)
 
+        // Request POST_NOTIFICATIONS on Android 13+ for background processing notification
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
+                != PackageManager.PERMISSION_GRANTED) {
+                notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            }
+        }
+
         setupBackPressHandler()
         setupButtons()
         checkStartupState()
+    }
+
+    /** Start the foreground service to keep the process alive in background */
+    private fun startProcessingService() {
+        val intent = Intent(this, OcrProcessingService::class.java)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            startForegroundService(intent)
+        } else {
+            startService(intent)
+        }
+    }
+
+    /** Stop the foreground service when processing is done */
+    private fun stopProcessingService() {
+        stopService(Intent(this, OcrProcessingService::class.java))
     }
 
     private fun checkStartupState() {
@@ -424,6 +455,9 @@ class MainActivity : AppCompatActivity() {
         processingJob?.cancel()
         setProcessingState(true)
 
+        // Start foreground service — keeps process alive if user switches to another app
+        startProcessingService()
+
         processingJob = lifecycleScope.launch(Dispatchers.IO) {
             try {
                 val extractedTexts = mutableListOf<String>()
@@ -437,6 +471,7 @@ class MainActivity : AppCompatActivity() {
 
                 if (extractedTexts.isEmpty() || extractedTexts.all { it.isBlank() }) {
                     withContext(Dispatchers.Main) {
+                        stopProcessingService()
                         setProcessingState(false)
                         binding.statusText.text = getString(R.string.status_no_output)
                     }
@@ -455,14 +490,13 @@ class MainActivity : AppCompatActivity() {
                 val result = ocrEngine.generateDocx(extractedTexts.toTypedArray(), outFile.absolutePath, getString(R.string.page_prefix))
 
                 withContext(Dispatchers.Main) {
+                    stopProcessingService()
                     setProcessingState(false)
                     if (result) {
                         lastOutputFile = outFile
-                        // Fix USE-07: Store text and make preview button visible
                         lastExtractedText = extractedTexts.joinToString("\n\n")
                         binding.btnPreview.visibility = View.VISIBLE
-                        
-                        // Fix USE-13: Show absolute path instead of just name
+
                         val statusMsg = getString(R.string.status_saved_success, outFile.absolutePath)
                         binding.statusText.text = if (failedPages.isNotEmpty()) {
                             statusMsg + "\n" + getString(
@@ -479,9 +513,11 @@ class MainActivity : AppCompatActivity() {
 
             } catch (e: CancellationException) {
                 Log.i(TAG, "Processing cancelled")
+                withContext(Dispatchers.Main) { stopProcessingService() }
             } catch (e: Exception) {
                 Log.e(TAG, "Processing failed", e)
                 withContext(Dispatchers.Main) {
+                    stopProcessingService()
                     setProcessingState(false)
                     binding.statusText.text = getString(R.string.status_error, getUserFriendlyError(e))
                 }
