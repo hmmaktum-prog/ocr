@@ -14,10 +14,6 @@
         <item name="colorOnSurfaceVariant">@color/colorOnSurfaceVariant</item>
         <item name="colorOutline">@color/colorOutline</item>
         <item name="colorError">@color/colorError</item>
-
-        <!-- Typography -->
-        <item name="fontFamily">@font/inter</item>
-        <item name="android:fontFamily">@font/inter</item>
     </style>
 
     <style name="Theme.OCR.Splash" parent="Theme.SplashScreen">
