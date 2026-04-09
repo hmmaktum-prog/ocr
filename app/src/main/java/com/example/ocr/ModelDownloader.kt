@@ -260,15 +260,12 @@ class ModelDownloader(private val context: Context) {
         // Fix CRITICAL-02: Added hardcoded placeholder hashes to enforce security.
         // TODO: Replace with the actual SHA-256 hashes for the specific model versions used.
         val knownHashes = mapOf<String, String>(
-            MAIN_MODEL_FILE to "PLACEHOLDER_HASH_REPLACE_ME_BEFORE_PRODUCTION",
-            MMPROJ_FILE to "PLACEHOLDER_HASH_REPLACE_ME_BEFORE_PRODUCTION"
+            MAIN_MODEL_FILE to "299051d54faa065abc505cc39b8383ea338fd3020c775ea3e0ba514a7022328c",
+            MMPROJ_FILE to "e7f1a72400fba517046f90d964e2fa0f4dac7781ee3b1bc5d2022f5f8cecbd87"
         )
         
         val expectedHash = knownHashes[file.name]
-        if (expectedHash == "PLACEHOLDER_HASH_REPLACE_ME_BEFORE_PRODUCTION") {
-            Log.e(TAG, "CRITICAL WARNING: Checksum verification bypassed! Placeholder hash used for ${file.name}.")
-            return true // Temporarily allow until real hashes are added by developer
-        } else if (expectedHash.isNullOrEmpty()) {
+        if (expectedHash.isNullOrEmpty()) {
             Log.w(TAG, "No checksum available to verify ${file.name}, proceeding without verification.")
             return true // Proceed conditionally if no hash is specified
         }

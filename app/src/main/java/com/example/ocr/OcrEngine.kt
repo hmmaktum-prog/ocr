@@ -88,7 +88,7 @@ class OcrEngine {
         }
         val textContent = JSONObject().apply {
             put("type", "text")
-            put("text", "You are an OCR engine. Transcribe every piece of text visible in this image exactly as it appears. Preserve line breaks and layout. Output only the transcribed text with no commentary.")
+            put("text", "OCR:")
         }
         val messagesArray = JSONArray().apply {
             put(JSONObject().apply {
@@ -103,8 +103,7 @@ class OcrEngine {
             put("model", "paddleocr")
             put("messages", messagesArray)
             put("max_tokens", 4096)
-            put("temperature", 0.1)
-            put("repeat_penalty", 1.15)
+            put("temperature", 0.0)
             put("stream", stream)
             put("stop", JSONArray().apply {
                 put("<|im_end|>")
