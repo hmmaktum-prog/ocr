@@ -2,7 +2,7 @@
 <resources>
     <string name="app_name">PaddleOCR-VL App</string>
 
-    <!-- Status messages -->
+    <string name="status_ready">প্রস্তুত</string>
     <string name="status_initializing">চালু হচ্ছে…</string>
     <string name="status_checking_models">মডেল চেক করা হচ্ছে…</string>
     <string name="status_downloading_model">মডেল ডাউনলোড হচ্ছে… <xliff:g xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2" id="progress">%1$d</xliff:g>%%</string>
