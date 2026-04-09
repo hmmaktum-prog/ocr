@@ -1,7 +1,6 @@
 package com.example.ocr
 
 import android.Manifest
-import android.animation.ObjectAnimator
 import android.app.ActivityManager
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -22,7 +21,6 @@ import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.content.ContextCompat
-import androidx.core.content.FileProvider
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.exifinterface.media.ExifInterface
 import androidx.lifecycle.lifecycleScope
@@ -31,14 +29,13 @@ import com.example.ocr.databinding.ActivityMainBinding
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.flow.catch
-import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.onCompletion
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
@@ -699,8 +696,7 @@ class MainActivity : AppCompatActivity() {
                 val index = chatAdapter.getItems().indexOfFirst { it.id == userMsg.id }
                 if (index != -1) {
                     val updated = chatAdapter.getItems()[index].copy(thumbnailPath = thumbFile.absolutePath)
-                    (chatAdapter.getItems() as MutableList)[index] = updated
-                    chatAdapter.notifyItemChanged(index)
+                    chatAdapter.updateMessage(index, updated)
                 }
             }
             processFile(uri, fileName, isPdf)
@@ -783,7 +779,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private suspend fun CoroutineScope.processPdfStreaming(uri: Uri, msgId: String, isFastMode: Boolean, startMs: Long) {
+    private suspend fun processPdfStreaming(uri: Uri, msgId: String, isFastMode: Boolean, startMs: Long) = coroutineScope {
         val fd = contentResolver.openFileDescriptor(uri, "r")
             ?: throw Exception("Cannot open file")
 

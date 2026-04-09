@@ -55,6 +55,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:visibility="gone"
+            android:indeterminate="true"
             app:indicatorColor="?attr/colorPrimary"
             app:trackColor="?attr/colorPrimaryContainer"
             app:trackCornerRadius="4dp" />

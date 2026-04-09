@@ -25,3 +25,7 @@
 -keepclassmembers class kotlinx.coroutines.** {
     volatile <fields>;
 }
+
+# Markwon markdown rendering library
+-keep class io.noties.markwon.** { *; }
+-dontwarn io.noties.markwon.**
