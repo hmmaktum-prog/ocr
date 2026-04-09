@@ -16,7 +16,7 @@
     <color name="colorSecondaryContainer">#F8FAFC</color>
     <color name="colorOnSecondaryContainer">#1E293B</color>
 
-    <color name="colorSurfaceVariant">#FFFFFF</color>
+    <color name="colorSurfaceVariant">#F1F5F9</color>
     <color name="colorOnSurfaceVariant">#475569</color>
     
     <!-- Border colors for elevated look -->

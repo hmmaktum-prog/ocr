@@ -3,6 +3,11 @@
     xmlns:app="http://schemas.android.com/apk/res-auto">
 
     <item
+        android:id="@+id/action_manage_models"
+        android:title="@string/menu_manage_models"
+        app:showAsAction="never" />
+
+    <item
         android:id="@+id/action_benchmark"
         android:title="@string/menu_benchmark"
         android:icon="@drawable/ic_benchmark"

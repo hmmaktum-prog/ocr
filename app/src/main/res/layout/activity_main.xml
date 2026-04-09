@@ -31,7 +31,7 @@
                 android:layout_height="wrap_content"
                 android:layout_gravity="end|center_vertical"
                 android:layout_marginEnd="16dp"
-                app:cardBackgroundColor="?attr/colorSecondary"
+                app:cardBackgroundColor="?attr/colorPrimaryContainer"
                 app:cardCornerRadius="12dp"
                 app:strokeWidth="1dp"
                 app:strokeColor="?attr/colorOutline"
@@ -43,7 +43,7 @@
                     android:paddingHorizontal="10dp"
                     android:paddingVertical="4dp"
                     android:text="RAM: -- MB"
-                    android:textColor="?attr/colorOnSecondary"
+                    android:textColor="?attr/colorOnPrimaryContainer"
                     android:textSize="11sp"
                     android:textStyle="bold" />
             </com.google.android.material.card.MaterialCardView>
@@ -181,27 +181,32 @@
             </com.google.android.material.card.MaterialCardView>
 
             <com.google.android.material.chip.Chip
-                android:id="@+id/qualityChip"
+                android:id="@+id/modeChip"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Fast"
+                android:text="OCR Mode"
                 android:layout_marginStart="12dp"
                 app:chipBackgroundColor="?attr/colorPrimaryContainer"
                 app:chipStrokeWidth="0dp"
                 app:iconStartPadding="8dp"
-                app:chipIcon="@drawable/ic_benchmark"
+                app:chipIcon="@drawable/ic_scan"
                 app:chipIconTint="?attr/colorOnPrimaryContainer"
                 android:textColor="?attr/colorOnPrimaryContainer"
-                app:chipIconSize="16dp" />
+                app:chipIconSize="18dp" />
 
-            <TextView
-                android:id="@+id/chatInputHint"
+            <EditText
+                android:id="@+id/customPromptInput"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:text="@string/hint_select_file"
+                android:hint="@string/hint_select_file"
                 android:textAppearance="?attr/textAppearanceBodyLarge"
                 android:textColor="?attr/colorOnSurfaceVariant"
+                android:textColorHint="?attr/colorOnSurfaceVariant"
+                android:background="@null"
+                android:enabled="false"
+                android:maxLines="3"
+                android:inputType="textMultiLine"
                 android:paddingStart="16dp" />
 
             <ImageButton

@@ -54,32 +54,15 @@ class OcrEngine {
             1.0f
         }
 
+        if (scale >= 1.0f) return bitmap
+
         val newWidth = (width * scale).toInt().coerceAtLeast(1)
         val newHeight = (height * scale).toInt().coerceAtLeast(1)
 
-        val dest = Bitmap.createBitmap(newWidth, newHeight, Bitmap.Config.ARGB_8888)
-        val canvas = android.graphics.Canvas(dest)
-
-        val contrast = 1.3f
-        val brightness = -10f
-        val colorMatrix = android.graphics.ColorMatrix(floatArrayOf(
-            contrast, 0f, 0f, 0f, brightness,
-            0f, contrast, 0f, 0f, brightness,
-            0f, 0f, contrast, 0f, brightness,
-            0f, 0f, 0f, 1f, 0f
-        ))
-
-        val paint = android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG)
-        paint.colorFilter = android.graphics.ColorMatrixColorFilter(colorMatrix)
-
-        val matrix = android.graphics.Matrix()
-        matrix.setScale(scale, scale)
-
-        canvas.drawBitmap(bitmap, matrix, paint)
-        return dest
+        return Bitmap.createScaledBitmap(bitmap, newWidth, newHeight, true)
     }
 
-    private fun buildChatRequestBody(base64Image: String, stream: Boolean): JSONObject {
+    private fun buildChatRequestBody(base64Image: String, stream: Boolean, promptType: String): JSONObject {
         val imageContent = JSONObject().apply {
             put("type", "image_url")
             put("image_url", JSONObject().apply {
@@ -88,7 +71,7 @@ class OcrEngine {
         }
         val textContent = JSONObject().apply {
             put("type", "text")
-            put("text", "OCR:")
+            put("text", promptType)
         }
         val messagesArray = JSONArray().apply {
             put(JSONObject().apply {
@@ -102,7 +85,6 @@ class OcrEngine {
         return JSONObject().apply {
             put("model", "paddleocr")
             put("messages", messagesArray)
-            put("max_tokens", 4096)
             put("temperature", 0.0)
             put("stream", stream)
             put("stop", JSONArray().apply {
@@ -114,7 +96,7 @@ class OcrEngine {
     }
 
     // Fix HIGH-03 & MEDIUM-11: Simplified retry with coroutine-cancellable OkHttp calls
-    suspend fun processImage(bitmap: Bitmap): Result<OcrResult> {
+    suspend fun processImage(bitmap: Bitmap, promptType: String = "OCR:"): Result<OcrResult> {
         var prepared: Bitmap? = null
         return try {
             prepared = prepareImageForOcr(bitmap, 1536)
@@ -128,7 +110,7 @@ class OcrEngine {
             val base64Bytes = outputStream.toByteArray()
             val base64Image = String(base64Bytes, Charsets.US_ASCII)
 
-            val jsonBody = buildChatRequestBody(base64Image, stream = false)
+            val jsonBody = buildChatRequestBody(base64Image, stream = false, promptType = promptType)
 
             val requestBody = jsonBody.toString().toRequestBody("application/json".toMediaType())
             val request = Request.Builder()
@@ -214,7 +196,7 @@ class OcrEngine {
     }
 
     // Fix MEDIUM-09: SSE streaming with coroutine cancellation support
-    fun processImageStreaming(bitmap: Bitmap, maxDimension: Int = 1536): Flow<StreamToken> = flow {
+    fun processImageStreaming(bitmap: Bitmap, maxDimension: Int = 1536, promptType: String = "OCR:"): Flow<StreamToken> = flow {
         emit(StreamToken.Thinking(0))
         var prepared: Bitmap? = null
         try {
@@ -228,7 +210,7 @@ class OcrEngine {
             val base64Bytes = outputStream.toByteArray()
             val base64Image = String(base64Bytes, Charsets.US_ASCII)
 
-            val jsonBody = buildChatRequestBody(base64Image, stream = true)
+            val jsonBody = buildChatRequestBody(base64Image, stream = true, promptType = promptType)
 
             val requestBody = jsonBody.toString().toRequestBody("application/json".toMediaType())
             val request = Request.Builder()
@@ -237,18 +219,46 @@ class OcrEngine {
                 .addHeader("Accept", "text/event-stream")
                 .build()
 
-            val call = HttpClientProvider.ocrClient.newCall(request)
-            // Fix MEDIUM-09: Cancel HTTP call when coroutine is cancelled
-            currentCoroutineContext()[Job]?.invokeOnCompletion {
-                if (it is CancellationException) call.cancel()
+            var callResponse: okhttp3.Response? = null
+            for (attempt in 0 until MAX_RETRIES) {
+                try {
+                    val call = HttpClientProvider.ocrClient.newCall(request)
+                    // Fix MEDIUM-09: Cancel HTTP call when coroutine is cancelled
+                    currentCoroutineContext()[Job]?.invokeOnCompletion {
+                        if (it is CancellationException) call.cancel()
+                    }
+                    val response = call.execute()
+                    if (!response.isSuccessful) {
+                        if (response.code in listOf(429, 503) && attempt < MAX_RETRIES - 1) {
+                            response.close()
+                            delay(1000L * (attempt + 1))
+                            continue
+                        }
+                        emit(StreamToken.Error("Server returned HTTP ${response.code}"))
+                        response.close()
+                        return@flow
+                    }
+                    callResponse = response
+                    break
+                } catch (e: Exception) {
+                    if (e is CancellationException) throw e
+                    val isRetryable = attempt < MAX_RETRIES - 1 && (
+                        e is java.net.SocketTimeoutException ||
+                        e.message?.contains("503") == true ||
+                        e.message?.contains("429") == true
+                    )
+                    if (isRetryable) {
+                        delay(1000L * (attempt + 1))
+                    } else {
+                        emit(StreamToken.Error("Connection failed: ${e.message}"))
+                        return@flow
+                    }
+                }
             }
 
-            call.execute().use { response ->
-                if (!response.isSuccessful) {
-                    emit(StreamToken.Error("Server returned HTTP ${response.code}"))
-                    return@use
-                }
+            if (callResponse == null) return@flow
 
+            callResponse.use { response ->
                 val source = response.body?.source()
                 if (source == null) {
                     emit(StreamToken.Error("Empty response body"))
@@ -514,7 +524,7 @@ class OcrEngine {
 """)
         texts.forEachIndexed { index, text ->
             if (texts.size > 1) {
-                sb.append("""    <w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr><w:r><w:rPr><w:b/></w:rPr><w:t>$pagePrefix ${index + 1}</w:t></w:r></w:p>
+                sb.append("""    <w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr><w:r><w:rPr><w:b/></w:rPr><w:t>${escapeXml("$pagePrefix ${index + 1}")}</w:t></w:r></w:p>
 """)
             }
             text.lines().forEach { line ->

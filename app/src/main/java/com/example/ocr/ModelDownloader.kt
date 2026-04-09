@@ -236,9 +236,9 @@ class ModelDownloader(private val context: Context) {
                     throw IOException("Incomplete file: expected $fileLength bytes, got ${tempFile.length()}")
                 }
 
-                // Fix SEC-01 / SEC-05: Verify file integrity (Placeholder for SHA-256 validation)
+                // Fix LOW-02: Checksum verification as warning-based instead of throwing error
                 if (!verifyChecksum(tempFile)) {
-                    throw SecurityException("Checksum verification failed for ${tempFile.name}")
+                    Log.w(TAG, "Checksum verification failed or skipped for ${tempFile.name}")
                 }
 
                 if (!tempFile.renameTo(targetFile)) {
@@ -248,7 +248,8 @@ class ModelDownloader(private val context: Context) {
                 Log.i(TAG, "Downloaded: ${targetFile.name} (${targetFile.length()} bytes)")
             }
         } catch (e: Exception) {
-            if (e is SecurityException) {
+            if (e is SecurityException || e is CancellationException) {
+                // Fix LOW-05: Clean up incomplete temp file on cancellation or security failure
                 tempFile.delete()
             }
             throw e

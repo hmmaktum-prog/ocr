@@ -78,6 +78,7 @@
     <string name="status_benchmark_result">Benchmark: %.1f tok/s</string>
     <string name="status_benchmark_no_timing">Benchmark done (no timing data from server)</string>
     <string name="status_benchmark_failed">Benchmark failed — check engine status</string>
+    <string name="status_copied">Copied to clipboard</string>
 
     <!-- Tok/s and RAM -->
     <string name="status_tok_per_sec">%.1f tok/s avg</string>
@@ -88,7 +89,7 @@
     <string name="device_info_cpu_temp">CPU Temperature: %1$.1f°C</string>
     <string name="device_info_cpu_temp_hot">CPU Temperature: %1$.1f°C  ⚠ HOT</string>
     <string name="device_info_cpu_temp_unknown">CPU Temperature: Unknown</string>
-    <string name="device_info_battery_saver_on">⚡ Battery Saver: ON (CPU-only, 2048 ctx)</string>
+    <string name="device_info_battery_saver_on">⚡ Battery Saver: ON (CPU-only, 4096 ctx)</string>
     <string name="device_info_battery_saver_off">Battery Saver: OFF</string>
     <string name="warning_cpu_hot">CPU is running hot (%1$.1f°C) — processing may be throttled</string>
 
@@ -123,6 +124,13 @@
     <string name="error_server_error">OCR processing failed. Please try again.</string>
     <string name="error_json_parse">Unexpected server response. Please restart the engine.</string>
     <string name="error_no_output">No text could be extracted. The file may be blank, image-only without OCR data, or corrupted. Try a different file.</string>
+
+    <!-- Error prefix for chat adapter -->
+    <string name="error_prefix">❌ Error: %1$s</string>
+
+    <!-- Image preview dialog accessibility -->
+    <string name="cd_fullscreen_preview">Full screen image preview</string>
+    <string name="cd_close_preview">Close preview</string>
 
     <!-- Dialogs -->
     <string name="dialog_cancel_title">Cancel Processing?</string>
@@ -193,5 +201,27 @@
     <string name="timing_page_progress">Page %1$d/%2$d</string>
     <string name="timing_elapsed">%1$s⏱ %2$ds</string>
     <string name="timing_done">%1$s⏱ %2$ds%3$s</string>
-    <string name="error_prefix">Error: %1$s</string>
+    <string name="prompt_mode_ocr">OCR Mode</string>
+    <string name="prompt_mode_table">Table Recog.</string>
+    <string name="prompt_mode_formula">Formula Recog.</string>
+    <string name="prompt_mode_chart">Chart Recog.</string>
+    <string name="prompt_mode_seal">Seal Reader</string>
+    <string name="prompt_mode_spotting">Text Spotting</string>
+
+    <string name="menu_manage_models">Manage Models</string>
+    <string name="title_model_manager">Model Manager</string>
+    <string name="title_hugging_face">Hugging Face Models</string>
+    <string name="btn_browse_hf">Browse Hugging Face</string>
+    <string name="model_status_active_main">Active Main Model</string>
+    <string name="model_status_active_vision">Active Vision Projector</string>
+    <string name="model_status_inactive">Inactive</string>
+    <string name="dialog_set_model_title">Set Active Model</string>
+    <string name="dialog_set_model_main">Set as Main Language Model</string>
+    <string name="dialog_set_model_vision">Set as Vision Projector</string>
+    <string name="dialog_delete_model_title">Delete Model</string>
+    <string name="dialog_delete_model_msg">Are you sure you want to delete this model? This cannot be undone.</string>
+    <string name="dialog_cancel">Cancel</string>
+    <string name="dialog_delete">Delete</string>
+    <string name="snack_restart_engine">Model changed. Please restart the engine for it to take effect.</string>
+    <string name="empty_models">No models found. Tap the button below to browse and download models.</string>
 </resources>

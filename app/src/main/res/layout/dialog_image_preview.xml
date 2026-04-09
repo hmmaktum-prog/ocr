@@ -5,12 +5,12 @@
     android:layout_height="match_parent"
     android:background="#E6000000">
 
-    <ImageView
+    <com.github.chrisbanes.photoview.PhotoView
         android:id="@+id/fullScreenImageView"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:layout_gravity="center"
-        android:contentDescription="Full screen image preview"
+        android:contentDescription="@string/cd_fullscreen_preview"
         android:scaleType="fitCenter" />
 
     <ImageButton
@@ -21,7 +21,7 @@
         android:layout_marginTop="32dp"
         android:layout_marginEnd="16dp"
         android:background="?attr/selectableItemBackgroundBorderless"
-        android:contentDescription="Close preview"
+        android:contentDescription="@string/cd_close_preview"
         android:src="@drawable/ic_cancel"
         app:tint="@android:color/white" />
 </FrameLayout>

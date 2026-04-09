@@ -42,6 +42,11 @@ class OcrProcessingService : Service() {
 
     override fun onDestroy() {
         Log.i(TAG, "Processing foreground service stopped")
+        // Fix LOW-07: Ensure notification is cleaned up on service destruction/crash
+        try {
+            val nm = getSystemService(NotificationManager::class.java)
+            nm.cancel(NOTIFICATION_ID)
+        } catch (_: Exception) {}
         super.onDestroy()
     }
 

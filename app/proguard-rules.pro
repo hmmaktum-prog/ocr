@@ -26,6 +26,8 @@
     volatile <fields>;
 }
 
-# Markwon markdown rendering library
--keep class io.noties.markwon.** { *; }
+# Markwon markdown rendering library — narrowed from wildcard
+-keep class io.noties.markwon.Markwon { *; }
+-keep class io.noties.markwon.AbstractMarkwonPlugin { *; }
+-keep class io.noties.markwon.core.** { *; }
 -dontwarn io.noties.markwon.**

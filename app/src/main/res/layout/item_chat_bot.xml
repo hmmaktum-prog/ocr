@@ -47,6 +47,7 @@
                 android:id="@+id/botMessageText"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
+                android:textIsSelectable="true"
                 android:textColor="?attr/colorOnSecondary"
                 android:textAppearance="?attr/textAppearanceBodyLarge"
                 android:lineSpacingExtra="4dp"

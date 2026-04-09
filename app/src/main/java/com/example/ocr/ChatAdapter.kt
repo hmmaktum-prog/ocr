@@ -3,7 +3,6 @@ package com.example.ocr
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
-import android.graphics.BitmapFactory
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -14,15 +13,17 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.annotation.MainThread
 import androidx.recyclerview.widget.RecyclerView
+import coil.load
 import io.noties.markwon.Markwon
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.File
 
 class ChatAdapter(
     private val context: Context,
+    private val lifecycleScope: CoroutineScope, // Fix CRITICAL-03: Use activity lifecycleScope instead of leaked adapterScope
     private val onExportClicked: (ChatMessage) -> Unit,
     private val onImageClicked: (String) -> Unit,
     private val onShareClicked: (ChatMessage) -> Unit
@@ -33,8 +34,7 @@ class ChatAdapter(
         .usePlugin(io.noties.markwon.ext.tables.TablePlugin.create(context))
         .build()
 
-    // Fix HIGH-07: Background scope for async bitmap loading
-    private val adapterScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    // Fix CRITICAL-03: adapterScope removed — using lifecycleScope passed from Activity
 
     companion object {
         const val VIEW_TYPE_USER = 1
@@ -46,8 +46,8 @@ class ChatAdapter(
         setHasStableIds(true)
     }
 
-    override fun getItemId(position: Int): Long {
-        return messages[position].id.hashCode().toLong()
+    override fun getItemId(position: Long): Long {
+        return messages[position.toInt()].id.hashCode().toLong()
     }
 
     fun addMessage(msg: ChatMessage) {
@@ -127,21 +127,13 @@ class ChatAdapter(
         fun bind(msg: ChatMessage) {
             fileNameText.text = msg.fileName ?: context.getString(R.string.default_document_name)
             val path = msg.thumbnailPath
-            if (path != null) {
+            if (path != null && File(path).exists()) {
                 thumbnailImage.visibility = View.VISIBLE
-                // Fix HIGH-07: Decode bitmap asynchronously to avoid main thread jank
-                val currentPosition = layoutPosition
-                adapterScope.launch {
-                    val bitmap = withContext(Dispatchers.IO) {
-                        val opts = BitmapFactory.Options().apply { inSampleSize = 2 }
-                        BitmapFactory.decodeFile(path, opts)
-                    }
-                    if (bitmap != null && currentPosition != RecyclerView.NO_POSITION) {
-                        thumbnailImage.setImageBitmap(bitmap)
-                        thumbnailImage.setOnClickListener {
-                            onImageClicked(path)
-                        }
-                    }
+                thumbnailImage.load(File(path)) {
+                    crossfade(true)
+                }
+                thumbnailImage.setOnClickListener {
+                    onImageClicked(path)
                 }
             } else {
                 thumbnailImage.setImageDrawable(null)
@@ -174,7 +166,14 @@ class ChatAdapter(
                 it.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
                 val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                 val clip = ClipData.newPlainText("OCR Text", msg.streamedText)
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                    clip.description.extras = android.os.PersistableBundle().apply {
+                        putBoolean(android.content.ClipDescription.EXTRA_IS_SENSITIVE, true)
+                    }
+                }
                 clipboard.setPrimaryClip(clip)
+                // Fix MEDIUM-13: Show copy feedback to user
+                Toast.makeText(context, context.getString(R.string.status_copied), Toast.LENGTH_SHORT).show()
             }
 
             btnShare.setOnClickListener {

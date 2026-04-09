@@ -63,23 +63,33 @@ class MainActivity : AppCompatActivity() {
     private var downloadJob: Job? = null
     private var ramUpdateJob: Job? = null
     private var isEngineReady: Boolean = false
+    private var currentPromptType: String = "OCR:"
 
-    private val saveDocumentLauncher = registerForActivityResult(
-        ActivityResultContracts.CreateDocument(
-            "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-        )
-    ) { uri ->
-        uri ?: return@registerForActivityResult
-        val src = File(getExternalFilesDir(null), "temp_export.docx")
-        if (!src.exists()) {
+    // Fix IMP-LOG-08: Used for maintaining explicit connection between generated file and android intent
+    private var pendingExportFile: File? = null
+
+    private val saveDocxLauncher = registerForActivityResult(
+        ActivityResultContracts.CreateDocument("application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+    ) { uri -> copyPendingExportTo(uri) }
+
+    private val saveTxtLauncher = registerForActivityResult(
+        ActivityResultContracts.CreateDocument("text/plain")
+    ) { uri -> copyPendingExportTo(uri) }
+
+    private fun copyPendingExportTo(uri: Uri?) {
+        uri ?: return
+        val src = pendingExportFile
+        if (src == null || !src.exists()) {
             Toast.makeText(this, getString(R.string.error_save_failed), Toast.LENGTH_SHORT).show()
-            return@registerForActivityResult
+            return
         }
         lifecycleScope.launch(Dispatchers.IO) {
             try {
                 contentResolver.openOutputStream(uri)?.use { out ->
                     src.inputStream().use { it.copyTo(out) }
                 }
+                src.delete()
+                pendingExportFile = null
                 withContext(Dispatchers.Main) {
                     com.google.android.material.snackbar.Snackbar.make(binding.root, getString(R.string.status_saved_to_device), com.google.android.material.snackbar.Snackbar.LENGTH_LONG).show()
                 }
@@ -87,6 +97,52 @@ class MainActivity : AppCompatActivity() {
                 withContext(Dispatchers.Main) { 
                     com.google.android.material.snackbar.Snackbar.make(binding.root, getString(R.string.error_save_failed), com.google.android.material.snackbar.Snackbar.LENGTH_SHORT).show() 
                 }
+            }
+        }
+    }
+
+    private fun exportAsDocx(msg: ChatMessage) {
+        binding.downloadProgressBar.visibility = View.VISIBLE
+        binding.downloadProgressBar.isIndeterminate = true
+        lifecycleScope.launch {
+            val baseDir = getExternalFilesDir(null) ?: filesDir
+            val uniqueId = System.currentTimeMillis()
+            val outFile = File(baseDir, "export_${uniqueId}.docx")
+            val exportTexts = if (msg.pagesContent.isNotEmpty()) msg.pagesContent.toTypedArray() else arrayOf(msg.streamedText)
+            val success = withContext(Dispatchers.IO) {
+                ocrEngine.generateDocx(exportTexts, outFile.absolutePath, "Page")
+            }
+            binding.downloadProgressBar.visibility = View.GONE
+            if (success) {
+                pendingExportFile = outFile
+                saveDocxLauncher.launch((msg.fileName ?: "document").substringBeforeLast(".") + ".docx")
+            } else {
+                com.google.android.material.snackbar.Snackbar.make(binding.root, getString(R.string.status_saved_failed), com.google.android.material.snackbar.Snackbar.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    private fun exportAsTxt(msg: ChatMessage) {
+        binding.downloadProgressBar.visibility = View.VISIBLE
+        binding.downloadProgressBar.isIndeterminate = true
+        lifecycleScope.launch {
+            val baseDir = getExternalFilesDir(null) ?: filesDir
+            val uniqueId = System.currentTimeMillis()
+            val outFile = File(baseDir, "export_${uniqueId}.txt")
+            val success = withContext(Dispatchers.IO) {
+                try {
+                    outFile.writeText(msg.streamedText)
+                    true
+                } catch(e: Exception) {
+                    false
+                }
+            }
+            binding.downloadProgressBar.visibility = View.GONE
+            if (success) {
+                pendingExportFile = outFile
+                saveTxtLauncher.launch((msg.fileName ?: "document").substringBeforeLast(".") + ".txt")
+            } else {
+                com.google.android.material.snackbar.Snackbar.make(binding.root, getString(R.string.status_saved_failed), com.google.android.material.snackbar.Snackbar.LENGTH_SHORT).show()
             }
         }
     }
@@ -116,17 +172,18 @@ class MainActivity : AppCompatActivity() {
             if (isDark) AppCompatDelegate.MODE_NIGHT_YES else AppCompatDelegate.MODE_NIGHT_NO
         )
 
-        chatAdapter = ChatAdapter(this,
+        chatAdapter = ChatAdapter(this, lifecycleScope,
             onExportClicked = { msg ->
-                val baseDir = getExternalFilesDir(null) ?: filesDir
-                val outFile = File(baseDir, "temp_export.docx")
-                val exportTexts = if (msg.pagesContent.isNotEmpty()) msg.pagesContent.toTypedArray() else arrayOf(msg.streamedText)
-                val success = ocrEngine.generateDocx(exportTexts, outFile.absolutePath, "Page")
-                if (success) {
-                    saveDocumentLauncher.launch((msg.fileName ?: "document").substringBeforeLast(".") + ".docx")
-                } else {
-                    com.google.android.material.snackbar.Snackbar.make(binding.root, getString(R.string.status_saved_failed), com.google.android.material.snackbar.Snackbar.LENGTH_SHORT).show()
-                }
+                val options = arrayOf("Export as DOCX (Formatted)", "Export as TXT (Markdown)")
+                androidx.appcompat.app.AlertDialog.Builder(this)
+                    .setTitle("Export Options")
+                    .setItems(options) { _, which ->
+                        when(which) {
+                            0 -> exportAsDocx(msg)
+                            1 -> exportAsTxt(msg)
+                        }
+                    }
+                    .show()
             },
             onImageClicked = { path ->
                 showImagePreview(path)
@@ -140,10 +197,14 @@ class MainActivity : AppCompatActivity() {
         binding.chatRecyclerView.layoutManager = layoutManager
         binding.chatRecyclerView.adapter = chatAdapter
 
-        binding.qualityChip.text = getString(R.string.mode_fast)
+        binding.modeChip.text = "OCR Mode"
 
         binding.topAppBar.setOnMenuItemClickListener { item ->
             when (item.itemId) {
+                R.id.action_manage_models -> {
+                    startActivity(Intent(this@MainActivity, ModelManagerActivity::class.java))
+                    true
+                }
                 R.id.action_toggle_theme -> {
                     val currentlyDark = AppCompatDelegate.getDefaultNightMode() == AppCompatDelegate.MODE_NIGHT_YES
                     val newMode = if (currentlyDark) AppCompatDelegate.MODE_NIGHT_NO else AppCompatDelegate.MODE_NIGHT_YES
@@ -188,6 +249,9 @@ class MainActivity : AppCompatActivity() {
                     if (isEngineReady) {
                         llamaServerManager.stopServer()
                         isEngineReady = false
+                        // Fix MEDIUM-01: Show start button so user can restart if init fails
+                        binding.startEngineButton.visibility = View.VISIBLE
+                        binding.startEngineButton.isEnabled = true
                         initEngine()
                     }
                     true
@@ -223,18 +287,47 @@ class MainActivity : AppCompatActivity() {
         val imageView = dialog.findViewById<android.widget.ImageView>(R.id.fullScreenImageView)
         val btnClose = dialog.findViewById<android.widget.ImageButton>(R.id.btnClosePreview)
 
+        // Fix CRITICAL-02: Scale down large images to prevent OOM, recycle on dismiss
+        var previewBitmap: android.graphics.Bitmap? = null
         lifecycleScope.launch(Dispatchers.IO) {
-            val bitmap = BitmapFactory.decodeFile(imagePath)
+            val opts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            BitmapFactory.decodeFile(imagePath, opts)
+            val maxPreview = 2048
+            opts.inSampleSize = calculatePreviewSampleSize(opts, maxPreview, maxPreview)
+            opts.inJustDecodeBounds = false
+            previewBitmap = BitmapFactory.decodeFile(imagePath, opts)
             withContext(Dispatchers.Main) {
-                if (bitmap != null) {
-                    imageView.setImageBitmap(bitmap)
-                }
+                previewBitmap?.let { imageView.setImageBitmap(it) }
             }
         }
 
-        btnClose.setOnClickListener { dialog.dismiss() }
-        imageView.setOnClickListener { dialog.dismiss() } // Tap to close
+        val dismissAction = {
+            imageView.setImageDrawable(null)
+            previewBitmap?.recycle()
+            previewBitmap = null
+            dialog.dismiss()
+        }
+        btnClose.setOnClickListener { dismissAction() }
+        imageView.setOnClickListener { dismissAction() }
+        dialog.setOnDismissListener {
+            imageView.setImageDrawable(null)
+            previewBitmap?.recycle()
+            previewBitmap = null
+        }
         dialog.show()
+    }
+
+    private fun calculatePreviewSampleSize(options: BitmapFactory.Options, reqWidth: Int, reqHeight: Int): Int {
+        val (height, width) = options.outHeight to options.outWidth
+        var inSampleSize = 1
+        if (height > reqHeight || width > reqWidth) {
+            val halfHeight = height / 2
+            val halfWidth = width / 2
+            while (halfHeight / inSampleSize >= reqHeight && halfWidth / inSampleSize >= reqWidth) {
+                inSampleSize *= 2
+            }
+        }
+        return inSampleSize
     }
 
     private fun startProcessingService() {
@@ -345,18 +438,50 @@ class MainActivity : AppCompatActivity() {
 
     private fun setupButtons() {
         binding.addFileButton.setOnClickListener { selectFileLauncher.launch(SUPPORTED_MIME_TYPES) }
-        binding.chatInputHint.setOnClickListener { selectFileLauncher.launch(SUPPORTED_MIME_TYPES) }
+        binding.customPromptInput.setOnClickListener { 
+            if (binding.modeChip.text != "Custom Prompt") {
+                selectFileLauncher.launch(SUPPORTED_MIME_TYPES) 
+            }
+        }
         binding.cancelButton.setOnClickListener { showCancelDialog() }
         binding.downloadModelButton.setOnClickListener { startModelDownload() }
         binding.startEngineButton.setOnClickListener { initEngine() }
 
-        binding.qualityChip.setOnClickListener {
-            val isFast = binding.qualityChip.text == getString(R.string.mode_fast)
-            if (isFast) {
-                binding.qualityChip.text = getString(R.string.mode_hq)
-            } else {
-                binding.qualityChip.text = getString(R.string.mode_fast)
+        binding.modeChip.setOnClickListener { view ->
+            val popupTextItems = listOf(
+                "OCR Mode" to "OCR:",
+                "Table Recog." to "Table Recognition:",
+                "Formula Recog." to "Formula Recognition:",
+                "Chart Recog." to "Chart Recognition:",
+                "Seal Reader" to "Seal Recognition:",
+                "Text Spotting" to "Spotting:",
+                "Custom Prompt" to "CUSTOM" // IMP-UI-10
+            )
+            
+            val popup = android.widget.PopupMenu(this, view)
+            popupTextItems.forEachIndexed { index, pair ->
+                popup.menu.add(android.view.Menu.NONE, index, index, pair.first)
             }
+            popup.setOnMenuItemClickListener { menuItem ->
+                val selected = popupTextItems[menuItem.itemId]
+                binding.modeChip.text = selected.first
+                if (selected.second == "CUSTOM") {
+                    binding.customPromptInput.isEnabled = true
+                    binding.customPromptInput.isFocusable = true
+                    binding.customPromptInput.isFocusableInTouchMode = true
+                    binding.customPromptInput.hint = "Type custom instruction..."
+                    binding.customPromptInput.requestFocus()
+                    currentPromptType = ""
+                } else {
+                    binding.customPromptInput.isEnabled = false
+                    binding.customPromptInput.isFocusable = false
+                    binding.customPromptInput.hint = getString(R.string.hint_select_file)
+                    binding.customPromptInput.text?.clear()
+                    currentPromptType = selected.second
+                }
+                true
+            }
+            popup.show()
         }
     }
 
@@ -494,6 +619,10 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun modelsAlreadyDownloaded(): Boolean {
+        val prefs = getSharedPreferences("app_prefs", MODE_PRIVATE)
+        val mainPath = prefs.getString("main_model_path", "")
+        if (!mainPath.isNullOrEmpty() && File(mainPath).exists()) return true
+
         val modelDir = getModelsDir()
         val mainModel = File(modelDir, ModelDownloader.MAIN_MODEL_FILE)
         val mmproj = File(modelDir, ModelDownloader.MMPROJ_FILE)
@@ -523,8 +652,19 @@ class MainActivity : AppCompatActivity() {
 
         engineLoadingJob = lifecycleScope.launch(Dispatchers.IO) {
             val modelDir = getModelsDir()
-            val modelPath = File(modelDir, ModelDownloader.MAIN_MODEL_FILE).absolutePath
-            val mmprojPath = File(modelDir, ModelDownloader.MMPROJ_FILE).absolutePath
+            val prefs = getSharedPreferences("app_prefs", MODE_PRIVATE)
+            var modelPath = prefs.getString("main_model_path", "")
+            var mmprojPath = prefs.getString("vision_model_path", "")
+
+            if (modelPath.isNullOrEmpty() || !File(modelPath).exists()) {
+                modelPath = File(modelDir, ModelDownloader.MAIN_MODEL_FILE).absolutePath
+            }
+            if (mmprojPath.isNullOrEmpty() || !File(mmprojPath).exists()) {
+                val defaultMmproj = File(modelDir, ModelDownloader.MMPROJ_FILE)
+                if (defaultMmproj.exists()) {
+                    mmprojPath = defaultMmproj.absolutePath
+                }
+            }
 
             val result = llamaServerManager.extractAndStartServer(modelPath, mmprojPath)
 
@@ -709,10 +849,11 @@ class MainActivity : AppCompatActivity() {
                 PdfRenderer(fd).use { renderer ->
                     renderer.openPage(0).use { page ->
                         val scale = 200f / maxOf(page.width, page.height)
+                        // Fix MEDIUM-02: Use RGB_565 for thumbnails — 50% less memory, no alpha needed
                         val bmp = Bitmap.createBitmap(
                             (page.width * scale).toInt().coerceAtLeast(1),
                             (page.height * scale).toInt().coerceAtLeast(1),
-                            Bitmap.Config.ARGB_8888
+                            Bitmap.Config.RGB_565
                         )
                         page.render(bmp, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
                         bmp
@@ -730,14 +871,14 @@ class MainActivity : AppCompatActivity() {
     private fun setProcessingUIVisible(processing: Boolean) {
         if (processing) {
             binding.addFileButton.isEnabled = false
-            binding.chatInputHint.text = getString(R.string.hint_processing)
+            binding.customPromptInput.hint = getString(R.string.hint_processing)
             binding.cancelButton.visibility = View.VISIBLE
-            binding.qualityChip.isEnabled = false
+            binding.modeChip.isEnabled = false
         } else {
             binding.addFileButton.isEnabled = true
-            binding.chatInputHint.text = getString(R.string.hint_select_file)
+            binding.customPromptInput.hint = if (binding.modeChip.text == "Custom Prompt") "Type custom instruction..." else getString(R.string.hint_select_file)
             binding.cancelButton.visibility = View.GONE
-            binding.qualityChip.isEnabled = true
+            binding.modeChip.isEnabled = true
         }
     }
 
@@ -748,17 +889,21 @@ class MainActivity : AppCompatActivity() {
 
         val botMsg = ChatMessage(type = ChatMessage.Type.BOT, state = ChatMessage.BotState.THINKING)
         chatAdapter.addMessage(botMsg)
-        binding.chatRecyclerView.scrollToPosition(chatAdapter.itemCount - 1)
+        binding.chatRecyclerView.smoothScrollToPosition(chatAdapter.itemCount - 1)
 
         val processingStartMs = System.currentTimeMillis()
-        val isFastMode = binding.qualityChip.text == getString(R.string.mode_fast)
+        
+        // Use custom text if we are in CUSTOM mode
+        if (binding.modeChip.text == "Custom Prompt") {
+            currentPromptType = binding.customPromptInput.text?.toString()?.plus(":") ?: "OCR:"
+        }
 
         processingJob = lifecycleScope.launch(Dispatchers.IO) {
             try {
                 if (isPdf) {
-                    processPdfStreaming(uri, botMsg.id, isFastMode, processingStartMs)
+                    processPdfStreaming(uri, botMsg.id, processingStartMs)
                 } else {
-                    processImageStreaming(uri, botMsg.id, isFastMode, processingStartMs)
+                    processImageStreaming(uri, botMsg.id, processingStartMs)
                 }
             } catch (e: CancellationException) {
                 Log.i(TAG, "Processing cancelled")
@@ -779,12 +924,12 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private suspend fun processPdfStreaming(uri: Uri, msgId: String, isFastMode: Boolean, startMs: Long) = coroutineScope {
+    private suspend fun processPdfStreaming(uri: Uri, msgId: String, startMs: Long) = coroutineScope {
         val fd = contentResolver.openFileDescriptor(uri, "r")
             ?: throw Exception("Cannot open file")
 
+        var renderer: PdfRenderer? = null
         try {
-            val renderer: PdfRenderer
             try {
                 renderer = PdfRenderer(fd)
             } catch (e: SecurityException) {
@@ -799,7 +944,7 @@ class MainActivity : AppCompatActivity() {
             }
 
             val availableMemMb = getAvailableMemoryMb()
-            val maxDim = if (isFastMode) 1536 else Int.MAX_VALUE
+            val maxDim = 1536 // Fix CRITICAL-01: Limit dimension to prevent OOM with huge images
             val baseScale = calculateSafeScale(defaultWidth, defaultHeight, availableMemMb, maxDim)
 
             var accumulatedPreviousPagesText = ""
@@ -862,7 +1007,7 @@ class MainActivity : AppCompatActivity() {
 
                     try {
                         var lastUiUpdate = 0L
-                        ocrEngine.processImageStreaming(bitmap, maxDim)
+                        ocrEngine.processImageStreaming(bitmap, maxDim, currentPromptType)
                             .onCompletion { bitmap.recycle() }
                             .collect { token ->
                                 currentCoroutineContext().ensureActive()
@@ -947,15 +1092,16 @@ class MainActivity : AppCompatActivity() {
                 }
             }
 
-            try { renderer.close() } catch (_: Exception) {}
+            // Fix T2-LOG-03: renderer.close() moved to finally block below
 
         } finally {
+            try { renderer?.close() } catch (_: Exception) {}
             try { fd.close() } catch (_: Exception) {}
         }
     }
 
-    private suspend fun processImageStreaming(uri: Uri, msgId: String, isFastMode: Boolean, startMs: Long) {
-        val maxDim = if (isFastMode) 1536 else Int.MAX_VALUE
+    private suspend fun processImageStreaming(uri: Uri, msgId: String, startMs: Long) {
+        val maxDim = 1536 // Fix CRITICAL-01: Limit dimension to prevent OOM with huge images
 
         val dimensions = getImageDimensions(uri)
         if (dimensions != null) {
@@ -988,7 +1134,7 @@ class MainActivity : AppCompatActivity() {
         var accumulatedText = ""
         var tokPerSec: Double? = null
 
-        ocrEngine.processImageStreaming(bitmap, maxDim)
+        ocrEngine.processImageStreaming(bitmap, maxDim, currentPromptType)
             .onCompletion { bitmap.recycle() }
             .collect { token ->
                 currentCoroutineContext().ensureActive()
@@ -1027,7 +1173,7 @@ class MainActivity : AppCompatActivity() {
                         }
                     }
                     if (token !is OcrEngine.StreamToken.Thinking) {
-                        binding.chatRecyclerView.scrollToPosition(chatAdapter.itemCount - 1)
+                        binding.chatRecyclerView.smoothScrollToPosition(chatAdapter.itemCount - 1)
                     }
                 }
             }
@@ -1145,15 +1291,25 @@ class MainActivity : AppCompatActivity() {
         }
         Toast.makeText(this, getString(R.string.status_benchmark_running), Toast.LENGTH_SHORT).show()
         lifecycleScope.launch {
-            val bitmap = Bitmap.createBitmap(224, 224, Bitmap.Config.ARGB_8888)
+            // Fix MEDIUM-04: Use realistic test image with text instead of blank bitmap
+            val bitmap = Bitmap.createBitmap(512, 512, Bitmap.Config.ARGB_8888)
+            val canvas = android.graphics.Canvas(bitmap)
+            val paint = android.graphics.Paint().apply { color = android.graphics.Color.WHITE }
+            canvas.drawRect(0f, 0f, 512f, 512f, paint)
+            paint.color = android.graphics.Color.BLACK
+            paint.textSize = 24f
+            canvas.drawText("OCR Benchmark Test 123", 10f, 50f, paint)
+            canvas.drawText("ABCDEFGHIJKLMNOPQR", 10f, 100f, paint)
             try {
                 var sec: Double? = null
                 ocrEngine.processImageStreaming(bitmap, 1536)
                     .onCompletion { bitmap.recycle() }
                     .collect { t -> if (t is OcrEngine.StreamToken.Done) sec = t.tokPerSec }
-                Toast.makeText(this@MainActivity, "Benchmark: $sec tok/s", Toast.LENGTH_LONG).show()
+                val speedStr = sec?.let { String.format("%.1f", it) } ?: "N/A"
+                Toast.makeText(this@MainActivity, "Benchmark: $speedStr tok/s", Toast.LENGTH_LONG).show()
             } catch (e: Exception) {
-                Toast.makeText(this@MainActivity, "Benchmark failed", Toast.LENGTH_LONG).show()
+                bitmap.recycle()
+                Toast.makeText(this@MainActivity, getString(R.string.status_benchmark_failed), Toast.LENGTH_LONG).show()
             }
         }
     }
@@ -1163,6 +1319,7 @@ class MainActivity : AppCompatActivity() {
         processingJob?.cancel()
         engineLoadingJob?.cancel()
         downloadJob?.cancel()
+        ramUpdateJob?.cancel() // Fix LOW-01: Cancel RAM monitoring to prevent leak
         stopProcessingService()
         if (isFinishing) {
             llamaServerManager.stopServer()

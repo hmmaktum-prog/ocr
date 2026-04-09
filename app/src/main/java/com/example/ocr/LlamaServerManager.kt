@@ -14,10 +14,19 @@ import java.util.concurrent.TimeUnit
 class LlamaServerManager(private val context: Context) {
     companion object {
         private const val TAG = "LlamaServerManager"
-        // Fix MEDIUM-16: Hardcoded port. TODO: Implement dynamic port/conflict detection.
-        private const val SERVER_PORT = 8080
-        const val SERVER_URL = "http://127.0.0.1:${SERVER_PORT}/completion"
-        const val CHAT_URL = "http://127.0.0.1:${SERVER_PORT}/v1/chat/completions"
+        // Fix MEDIUM-05: Dynamic port allocation instead of hardcoded 8080
+        var SERVER_PORT = 8080
+            private set
+        val SERVER_URL: String get() = "http://127.0.0.1:${SERVER_PORT}/completion"
+        val CHAT_URL: String get() = "http://127.0.0.1:${SERVER_PORT}/v1/chat/completions"
+        
+        private fun findFreePort(): Int {
+            return try {
+                java.net.ServerSocket(0).use { it.localPort }
+            } catch (_: Exception) {
+                8080
+            }
+        }
         // ELF magic bytes — একটি বৈধ Linux/Android binary এভাবে শুরু হয়
         private val ELF_MAGIC = byteArrayOf(0x7F, 0x45, 0x4C, 0x46)
 
@@ -90,7 +99,7 @@ class LlamaServerManager(private val context: Context) {
         // Fix HIGH-04: Use cached cpuInfo instead of duplicating CPU detection logic
         val info = cpuInfo
         val bigCores = info.bigCoreCount
-        val maxFreqMhz = info.maxFreqMhz / 1000
+        val maxFreqMhz = info.maxFreqKhz / 1000
 
         val activityManager = context.getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager
         val memInfo = android.app.ActivityManager.MemoryInfo()
@@ -103,9 +112,9 @@ class LlamaServerManager(private val context: Context) {
 
         val effectiveGpuLayers = if (batterySaverMode) 0 else detectGpuLayers(totalRamMb)
         val cpuThreads = cpuInfo.bigCoreCount
-        val effectiveContextSize = if (batterySaverMode) 2048 else when {
-            totalRamMb < 3072 -> 2048
-            totalRamMb < 6144 -> 4096
+        val effectiveContextSize = if (batterySaverMode) 4096 else when {
+            totalRamMb < 4096 -> 4096
+            totalRamMb < 6144 -> 6144
             else              -> 8192
         }
 
@@ -158,7 +167,7 @@ class LlamaServerManager(private val context: Context) {
         fun onLoadingProgress(elapsedSeconds: Int, maxSeconds: Int, stageMessage: String)
     }
 
-    private data class CpuInfo(val bigCoreCount: Int, val maxFreqMhz: Long)
+    private data class CpuInfo(val bigCoreCount: Int, val maxFreqKhz: Long)
 
     private val cpuInfo: CpuInfo by lazy { detectCpuInfo() }
 
@@ -298,16 +307,14 @@ class LlamaServerManager(private val context: Context) {
             val modelFile = File(modelPath)
             val mmprojFile = File(mmprojPath)
             if (!modelFile.exists()) {
-                return@withContext StartResult.Error("Model file not found: $modelPath")
-            }
-            if (!mmprojFile.exists()) {
-                return@withContext StartResult.Error("Projector file not found: $mmprojPath")
+                return@withContext StartResult.Error("Model file missing: $modelPath")
             }
 
             // Step 4: পুরনো প্রসেস বন্ধ করো এবং কোনো Orphan প্রসেস থাকলে তা কিল করো
             stopServer()
             try {
-                Runtime.getRuntime().exec(arrayOf("sh", "-c", "killall -9 libllama_server.so")).waitFor()
+                // Fix MEDIUM-07: Use pkill instead of killall for better Android compatibility
+                Runtime.getRuntime().exec(arrayOf("sh", "-c", "pkill -9 libllama_server")).waitFor()
             } catch (e: Exception) {
                 // Ignore if killall is unavailable
             }
@@ -319,9 +326,9 @@ class LlamaServerManager(private val context: Context) {
             val totalRamMb = memInfo.totalMem / (1024 * 1024)
 
             // Battery saver mode: CPU-only, smaller context — saves power & RAM
-            val contextSize = if (batterySaverMode) 2048 else when {
-                totalRamMb < 3072 -> 2048
-                totalRamMb < 6144 -> 4096
+            val contextSize = if (batterySaverMode) 4096 else when {
+                totalRamMb < 4096 -> 4096
+                totalRamMb < 6144 -> 6144
                 else              -> 8192
             }
             val cpuThreads = cpuInfo.bigCoreCount
@@ -332,17 +339,34 @@ class LlamaServerManager(private val context: Context) {
             // Step 6: নতুন প্রসেস শুরু করো
             val proc: Process
             try {
+                val env = mutableMapOf(
+                    "LD_LIBRARY_PATH" to File(context.applicationInfo.nativeLibraryDir).absolutePath,
+                    "OMP_NUM_THREADS" to cpuThreads.toString() // OpenMP CPU mapping
+                )
+
+                // Dynamic port allocation before starting
+                SERVER_PORT = findFreePort()
+
+                // Step 6: llama-server Process শুরু করো
                 val cmd = mutableListOf(
                     serverFile.absolutePath,
                     "-m",        modelPath,
-                    "--mmproj",  mmprojPath,
+                )
+
+                if (mmprojFile.exists()) {
+                    cmd.add("--mmproj")
+                    cmd.add(mmprojPath)
+                }
+
+                cmd.addAll(listOf(
                     "--port",    SERVER_PORT.toString(),
                     "--host",    "127.0.0.1",
+                    "--temp",    "0",
                     "-c",        contextSize.toString(),
                     "-t",        cpuThreads.toString(),
                     "-tb",       Runtime.getRuntime().availableProcessors().toString(),
                     "-cb"
-                )
+                ))
                 if (gpuLayers > 0) {
                     cmd += listOf("-ngl", gpuLayers.toString())
                 }
@@ -442,6 +466,8 @@ class LlamaServerManager(private val context: Context) {
         } catch (e: Exception) {
             // Coroutine cancelled or other exception — cleanup
             Log.w(TAG, "waitForServerReady interrupted", e)
+            // Fix LOW-03: Interrupt output reading thread to prevent it lingering
+            outputThread.interrupt()
             cleanupProcess(proc)
             throw e
         }
@@ -450,6 +476,7 @@ class LlamaServerManager(private val context: Context) {
         // Fix LOGIC-06: synchronized read to avoid race with outputThread
         val output = synchronized(outputBuffer) { outputBuffer.toString().trim() }
         Log.e(TAG, "Server timed out after ${maxWaitMs}ms. Output:\n$output")
+        outputThread.interrupt()
         cleanupProcess(proc)
         return StartResult.Timeout(output)
     }
