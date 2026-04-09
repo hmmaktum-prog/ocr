@@ -67,7 +67,7 @@
         android:clipToPadding="false"
         android:paddingTop="8dp"
         android:paddingBottom="120dp"
-        app:layoutAnimation="@anim/layout_animation_slide_up"
+        android:layoutAnimation="@anim/layout_animation_slide_up"
         app:layout_behavior="@string/appbar_scrolling_view_behavior" />
 
     <LinearLayout
