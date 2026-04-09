@@ -90,12 +90,14 @@
             app:strokeWidth="0dp"
             android:layout_marginBottom="32dp">
             
-            <ImageView
-                android:layout_width="80dp"
-                android:layout_height="80dp"
+            <com.airbnb.lottie.LottieAnimationView
+                android:id="@+id/emptyStateAnimation"
+                android:layout_width="100dp"
+                android:layout_height="100dp"
                 android:layout_gravity="center"
-                android:src="@drawable/splash_icon"
-                app:tint="?attr/colorPrimary"
+                app:lottie_rawRes="@raw/document_scan_anim"
+                app:lottie_autoPlay="true"
+                app:lottie_loop="true"
                 android:contentDescription="@string/cd_app_logo"/>
         </com.google.android.material.card.MaterialCardView>
 

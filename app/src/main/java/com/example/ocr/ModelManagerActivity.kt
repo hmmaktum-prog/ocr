@@ -37,7 +37,7 @@ class ModelManagerActivity : AppCompatActivity() {
         tvEmptyModels = findViewById(R.id.tvEmptyModels)
 
         rvModels.layoutManager = LinearLayoutManager(this)
-        modelsAdapter = ModelsAdapter(this, getModelsDir()) { file ->
+        modelsAdapter = ModelsAdapter(this, getModelsDir(), lifecycleScope) { file ->
             showSetModelDialog(file)
         }
         rvModels.adapter = modelsAdapter
@@ -97,6 +97,7 @@ class ModelManagerActivity : AppCompatActivity() {
     class ModelsAdapter(
         private val context: Context,
         private val modelsDir: File,
+        private val scope: CoroutineScope,
         private val onClick: (File) -> Unit
     ) : RecyclerView.Adapter<ModelsAdapter.ViewHolder>() {
 
@@ -107,8 +108,17 @@ class ModelManagerActivity : AppCompatActivity() {
         }
 
         fun refresh() {
-            modelFiles = modelsDir.listFiles { _, name -> name.endsWith(".gguf") }?.toList() ?: emptyList()
-            notifyDataSetChanged()
+            scope.launch {
+                val files = withContext(Dispatchers.IO) {
+                    modelsDir.listFiles { _, name -> name.endsWith(".gguf") }?.toList() ?: emptyList()
+                }
+                modelFiles = files
+                notifyDataSetChanged()
+                
+                if (context is ModelManagerActivity) {
+                    context.updateEmptyState(files.isEmpty())
+                }
+            }
         }
 
         override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {

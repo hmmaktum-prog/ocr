@@ -62,6 +62,7 @@ class MainActivity : AppCompatActivity() {
     private var engineLoadingJob: Job? = null
     private var downloadJob: Job? = null
     private var ramUpdateJob: Job? = null
+    private var pulseAnimator: android.animation.ObjectAnimator? = null
     private var isEngineReady: Boolean = false
     private var currentPromptType: String = "OCR:"
 
@@ -224,6 +225,7 @@ class MainActivity : AppCompatActivity() {
                                 
                                 lifecycleScope.launch(Dispatchers.IO) {
                                     cacheDir.listFiles()?.forEach { if (it.name.startsWith("thumb_")) it.delete() }
+                                    HistoryManager.clearHistory(this@MainActivity)
                                 }
                             }
                             .setNegativeButton(getString(R.string.dialog_no), null)
@@ -269,6 +271,16 @@ class MainActivity : AppCompatActivity() {
         setupButtons()
         setupBackPressHandler()
         checkStartupState()
+        
+        // IMP-LOG-01: Load OCR chat history
+        lifecycleScope.launch {
+            val history = HistoryManager.loadHistory(this@MainActivity)
+            if (history.isNotEmpty()) {
+                chatAdapter.setMessages(history)
+                binding.chatRecyclerView.scrollToPosition(history.size - 1)
+                binding.emptyStateLayout.visibility = android.view.View.GONE
+            }
+        }
     }
 
     private fun shareText(text: String) {
@@ -403,6 +415,14 @@ class MainActivity : AppCompatActivity() {
     override fun onPause() {
         super.onPause()
         ramUpdateJob?.cancel()
+    }
+    
+    override fun onStop() {
+        super.onStop()
+        // Save chat history automatically on exiting or suspending
+        lifecycleScope.launch {
+            HistoryManager.saveHistory(this@MainActivity, chatAdapter.getMessages())
+        }
     }
 
     private fun startLiveRamUpdates() {
@@ -874,12 +894,32 @@ class MainActivity : AppCompatActivity() {
             binding.customPromptInput.hint = getString(R.string.hint_processing)
             binding.cancelButton.visibility = View.VISIBLE
             binding.modeChip.isEnabled = false
+            startPulseAnimation()
         } else {
             binding.addFileButton.isEnabled = true
             binding.customPromptInput.hint = if (binding.modeChip.text == "Custom Prompt") "Type custom instruction..." else getString(R.string.hint_select_file)
             binding.cancelButton.visibility = View.GONE
             binding.modeChip.isEnabled = true
+            stopPulseAnimation()
         }
+    }
+
+    private fun startPulseAnimation() {
+        pulseAnimator?.cancel()
+        // Target the bottom card (MaterialCardView is the parent of the input area)
+        val bottomBar = binding.customPromptInput.parent.parent as? View ?: return
+        pulseAnimator = android.animation.ObjectAnimator.ofFloat(bottomBar, "alpha", 1f, 0.6f, 1f).apply {
+            duration = 1500
+            repeatCount = android.animation.ObjectAnimator.INFINITE
+            interpolator = android.view.animation.AccelerateDecelerateInterpolator()
+            start()
+        }
+    }
+
+    private fun stopPulseAnimation() {
+        pulseAnimator?.cancel()
+        val bottomBar = binding.customPromptInput.parent.parent as? View ?: return
+        bottomBar.alpha = 1f
     }
 
     private fun processFile(uri: Uri, fileName: String, isPdf: Boolean) {

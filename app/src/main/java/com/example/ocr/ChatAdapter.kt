@@ -55,6 +55,14 @@ class ChatAdapter(
         notifyItemInserted(messages.size - 1)
     }
 
+    fun getMessages(): List<ChatMessage> = messages
+    
+    fun setMessages(newMessages: List<ChatMessage>) {
+        messages.clear()
+        messages.addAll(newMessages)
+        notifyDataSetChanged()
+    }
+
     // Fix CRITICAL-01: Safe update method instead of `as MutableList` cast
     fun updateMessage(index: Int, msg: ChatMessage) {
         if (index in messages.indices) {
@@ -149,7 +157,8 @@ class ChatAdapter(
 
     inner class BotViewHolder(view: View) : RecyclerView.ViewHolder(view) {
         private val botMessageText: TextView = view.findViewById(R.id.botMessageText)
-        private val thinkingIndicator: LinearLayout = view.findViewById(R.id.thinkingIndicator)
+        private val thinkingIndicator: com.facebook.shimmer.ShimmerFrameLayout = view.findViewById(R.id.thinkingIndicator)
+        private val pdfProgressIndicator: com.google.android.material.progressindicator.LinearProgressIndicator = view.findViewById(R.id.pdfProgressIndicator)
         private val timingText: TextView = view.findViewById(R.id.timingText)
         private val actionButtonsContainer: LinearLayout = view.findViewById(R.id.actionButtonsContainer)
         private val errorText: TextView = view.findViewById(R.id.errorText)
@@ -199,6 +208,8 @@ class ChatAdapter(
             when (msg.state) {
                 ChatMessage.BotState.THINKING -> {
                     thinkingIndicator.visibility = View.VISIBLE
+                    thinkingIndicator.startShimmer()
+                    pdfProgressIndicator.visibility = View.GONE
                     botMessageText.visibility = View.GONE
                     timingText.visibility = View.GONE
                     actionButtonsContainer.visibility = View.GONE
@@ -206,9 +217,19 @@ class ChatAdapter(
                 }
                 ChatMessage.BotState.STREAMING -> {
                     thinkingIndicator.visibility = View.GONE
+                    thinkingIndicator.stopShimmer()
                     botMessageText.visibility = View.VISIBLE
                     renderText(msg)
                     timingText.visibility = View.VISIBLE
+                    
+                    if (msg.totalPages > 1) {
+                        pdfProgressIndicator.visibility = View.VISIBLE
+                        pdfProgressIndicator.max = msg.totalPages
+                        if (msg.currentPage > 0) pdfProgressIndicator.setProgressCompat(msg.currentPage, true)
+                    } else {
+                        pdfProgressIndicator.visibility = View.GONE
+                    }
+                    
                     // Fix MEDIUM-27: Use string resource for timing
                     val progress = if (msg.totalPages > 1) context.getString(R.string.timing_page_progress, msg.currentPage, msg.totalPages) + " • " else ""
                     timingText.text = context.getString(R.string.timing_elapsed, progress, msg.elapsedSeconds)
@@ -217,6 +238,8 @@ class ChatAdapter(
                 }
                 ChatMessage.BotState.DONE -> {
                     thinkingIndicator.visibility = View.GONE
+                    thinkingIndicator.stopShimmer()
+                    pdfProgressIndicator.visibility = View.GONE
                     botMessageText.visibility = View.VISIBLE
                     renderText(msg)
                     timingText.visibility = View.VISIBLE
@@ -231,6 +254,8 @@ class ChatAdapter(
                 }
                 ChatMessage.BotState.ERROR -> {
                     thinkingIndicator.visibility = View.GONE
+                    thinkingIndicator.stopShimmer()
+                    pdfProgressIndicator.visibility = View.GONE
                     botMessageText.visibility = View.GONE // Keep hiding or show partial? Show partial
                     if (msg.streamedText.isNotEmpty()) {
                         botMessageText.visibility = View.VISIBLE
