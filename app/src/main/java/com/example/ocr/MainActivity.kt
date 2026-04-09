@@ -874,7 +874,15 @@ class MainActivity : AppCompatActivity() {
                                 when (token) {
                                     is OcrEngine.StreamToken.Text -> currentPageText += token.content
                                     is OcrEngine.StreamToken.Error -> currentPageText += "\n\n[Page Error: ${token.message}]\n\n"
-                                    is OcrEngine.StreamToken.Done -> currentPageText = token.fullText
+                                    is OcrEngine.StreamToken.Done -> {
+                                        var text = token.fullText.trim()
+                                        if (text.isEmpty() && currentPageText.trim().isNotEmpty()) {
+                                            text = currentPageText.trim()
+                                        } else if (text.isEmpty()) {
+                                            text = "*(No text detected)*"
+                                        }
+                                        currentPageText = text
+                                    }
                                     else -> {}
                                 }
 
@@ -931,7 +939,9 @@ class MainActivity : AppCompatActivity() {
             withContext(Dispatchers.Main) {
                 chatAdapter.updateBotMessage(msgId) {
                     it.state = ChatMessage.BotState.DONE
-                    it.streamedText = accumulatedPreviousPagesText.trim()
+                    var finalText = accumulatedPreviousPagesText.trim()
+                    if (finalText.isEmpty()) finalText = "*(No text detected)*"
+                    it.streamedText = finalText
                     it.tokPerSec = currentTokPerSec
                     it.elapsedSeconds = ((System.currentTimeMillis() - startMs) / 1000).toInt()
                 }
@@ -999,7 +1009,13 @@ class MainActivity : AppCompatActivity() {
                             }
                             is OcrEngine.StreamToken.Done -> {
                                 it.state = ChatMessage.BotState.DONE
-                                it.streamedText = token.fullText
+                                var text = token.fullText.trim()
+                                if (text.isEmpty() && accumulatedText.trim().isNotEmpty()) {
+                                    text = accumulatedText.trim()
+                                } else if (text.isEmpty()) {
+                                    text = "*(No text detected)*"
+                                }
+                                it.streamedText = text
                                 it.tokPerSec = token.tokPerSec
                                 it.elapsedSeconds = nowSec
                             }
