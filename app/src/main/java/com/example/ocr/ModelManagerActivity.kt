@@ -142,15 +142,26 @@ class ModelManagerActivity : AppCompatActivity() {
             }
 
             val prefs = context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
-            val currentMain = prefs.getString("main_model_path", "")
-            val currentVision = prefs.getString("vision_model_path", "")
+            val currentMain = prefs.getString("main_model_path", "")?.takeIf { it.isNotEmpty() && File(it).exists() }
+                ?: File(modelsDir, ModelDownloader.MAIN_MODEL_FILE).absolutePath
+            val currentVision = prefs.getString("vision_model_path", "")?.takeIf { it.isNotEmpty() && File(it).exists() }
+                ?: File(modelsDir, ModelDownloader.MMPROJ_FILE).absolutePath
 
-            when (file.absolutePath) {
-                currentMain -> {
+            val isMain = file.absolutePath == currentMain
+            val isVision = file.absolutePath == currentVision
+
+            when {
+                isMain && isVision -> {
+                    val mainText = context.getString(R.string.model_status_active_main)
+                    val visionText = context.getString(R.string.model_status_active_vision)
+                    holder.tvModelStatus.text = "$mainText & $visionText"
+                    holder.tvModelStatus.setTextColor(ContextCompat.getColor(context, R.color.colorOnPrimaryContainer))
+                }
+                isMain -> {
                     holder.tvModelStatus.text = context.getString(R.string.model_status_active_main)
                     holder.tvModelStatus.setTextColor(ContextCompat.getColor(context, R.color.colorOnPrimaryContainer))
                 }
-                currentVision -> {
+                isVision -> {
                     holder.tvModelStatus.text = context.getString(R.string.model_status_active_vision)
                     holder.tvModelStatus.setTextColor(ContextCompat.getColor(context, R.color.colorOnPrimaryContainer))
                 }
