@@ -25,6 +25,7 @@ import java.util.zip.ZipOutputStream
 class OcrEngine {
     companion object {
         private const val TAG = "OcrEngine"
+        private const val MAX_RETRIES = 3
 
         // Fix PERF-09: Use shared Http client
         private val client = HttpClientProvider.client
