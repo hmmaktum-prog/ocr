@@ -46,8 +46,8 @@ class ChatAdapter(
         setHasStableIds(true)
     }
 
-    override fun getItemId(position: Long): Long {
-        return messages[position.toInt()].id.hashCode().toLong()
+    override fun getItemId(position: Int): Long {
+        return messages[position].id.hashCode().toLong()
     }
 
     fun addMessage(msg: ChatMessage) {

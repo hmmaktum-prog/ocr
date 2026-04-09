@@ -103,8 +103,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun exportAsDocx(msg: ChatMessage) {
-        binding.downloadProgressBar.visibility = View.VISIBLE
-        binding.downloadProgressBar.isIndeterminate = true
+        binding.mainProgressIndicator.visibility = View.VISIBLE
+        binding.mainProgressIndicator.isIndeterminate = true
         lifecycleScope.launch {
             val baseDir = getExternalFilesDir(null) ?: filesDir
             val uniqueId = System.currentTimeMillis()
@@ -113,7 +113,7 @@ class MainActivity : AppCompatActivity() {
             val success = withContext(Dispatchers.IO) {
                 ocrEngine.generateDocx(exportTexts, outFile.absolutePath, "Page")
             }
-            binding.downloadProgressBar.visibility = View.GONE
+            binding.mainProgressIndicator.visibility = View.GONE
             if (success) {
                 pendingExportFile = outFile
                 saveDocxLauncher.launch((msg.fileName ?: "document").substringBeforeLast(".") + ".docx")
@@ -124,8 +124,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun exportAsTxt(msg: ChatMessage) {
-        binding.downloadProgressBar.visibility = View.VISIBLE
-        binding.downloadProgressBar.isIndeterminate = true
+        binding.mainProgressIndicator.visibility = View.VISIBLE
+        binding.mainProgressIndicator.isIndeterminate = true
         lifecycleScope.launch {
             val baseDir = getExternalFilesDir(null) ?: filesDir
             val uniqueId = System.currentTimeMillis()
@@ -138,7 +138,7 @@ class MainActivity : AppCompatActivity() {
                     false
                 }
             }
-            binding.downloadProgressBar.visibility = View.GONE
+            binding.mainProgressIndicator.visibility = View.GONE
             if (success) {
                 pendingExportFile = outFile
                 saveTxtLauncher.launch((msg.fileName ?: "document").substringBeforeLast(".") + ".txt")
@@ -360,7 +360,8 @@ class MainActivity : AppCompatActivity() {
         binding.mainProgressIndicator.visibility = if (loading) View.VISIBLE else View.GONE
         if (!loading && isEngineReady) {
             binding.addFileButton.isEnabled = true
-            binding.chatInputHint.text = getString(R.string.hint_select_file)
+            binding.customPromptInput.setText("")
+            binding.customPromptInput.hint = getString(R.string.hint_select_file)
         }
     }
 
@@ -674,18 +675,10 @@ class MainActivity : AppCompatActivity() {
         engineLoadingJob = lifecycleScope.launch(Dispatchers.IO) {
             val modelDir = getModelsDir()
             val prefs = getSharedPreferences("app_prefs", MODE_PRIVATE)
-            var modelPath = prefs.getString("main_model_path", "")
-            var mmprojPath = prefs.getString("vision_model_path", "")
-
-            if (modelPath.isNullOrEmpty() || !File(modelPath).exists()) {
-                modelPath = File(modelDir, ModelDownloader.MAIN_MODEL_FILE).absolutePath
-            }
-            if (mmprojPath.isNullOrEmpty() || !File(mmprojPath).exists()) {
-                val defaultMmproj = File(modelDir, ModelDownloader.MMPROJ_FILE)
-                if (defaultMmproj.exists()) {
-                    mmprojPath = defaultMmproj.absolutePath
-                }
-            }
+            val modelPath = prefs.getString("main_model_path", "")?.takeIf { it.isNotEmpty() && File(it).exists() }
+                ?: File(modelDir, ModelDownloader.MAIN_MODEL_FILE).absolutePath
+            val mmprojPath = prefs.getString("vision_model_path", "")?.takeIf { it.isNotEmpty() && File(it).exists() }
+                ?: File(modelDir, ModelDownloader.MMPROJ_FILE).absolutePath
 
             val result = llamaServerManager.extractAndStartServer(modelPath, mmprojPath)
 
@@ -697,7 +690,7 @@ class MainActivity : AppCompatActivity() {
                         binding.startEngineButton.visibility = View.GONE
                         binding.emptyStateLayout.visibility = if (chatAdapter.itemCount == 0) View.VISIBLE else View.GONE
                         setMainState(getString(R.string.status_engine_ready), false)
-                        binding.chatInputHint.text = getString(R.string.hint_select_file)
+                        binding.customPromptInput.hint = getString(R.string.hint_select_file)
                     }
                     is LlamaServerManager.StartResult.InvalidBinary -> {
                         setMainState(getString(R.string.status_engine_failed), false)

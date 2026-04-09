@@ -16,6 +16,11 @@ import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.appbar.MaterialToolbar
 import com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton
 import com.google.android.material.snackbar.Snackbar
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.File
 
 class ModelManagerActivity : AppCompatActivity() {
@@ -53,8 +58,7 @@ class ModelManagerActivity : AppCompatActivity() {
         updateEmptyState()
     }
 
-    private fun updateEmptyState() {
-        val isEmpty = modelsAdapter.itemCount == 0
+    private fun updateEmptyState(isEmpty: Boolean = modelsAdapter.itemCount == 0) {
         tvEmptyModels.visibility = if (isEmpty) View.VISIBLE else View.GONE
         rvModels.visibility = if (isEmpty) View.GONE else View.VISIBLE
     }
