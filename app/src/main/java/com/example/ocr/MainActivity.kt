@@ -795,9 +795,8 @@ class MainActivity : AppCompatActivity() {
                 throw Exception(getString(R.string.error_pdf_password_protected))
             }
 
-            try {
-                val pageCount = renderer.pageCount
-                if (pageCount == 0) throw Exception(getString(R.string.error_pdf_empty))
+            val pageCount = renderer.pageCount
+            if (pageCount == 0) throw Exception(getString(R.string.error_pdf_empty))
 
             val (defaultWidth, defaultHeight) = renderer.openPage(0).use { page ->
                 Pair(page.width, page.height)
