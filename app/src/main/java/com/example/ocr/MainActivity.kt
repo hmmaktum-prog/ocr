@@ -783,7 +783,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private suspend fun processPdfStreaming(uri: Uri, msgId: String, isFastMode: Boolean, startMs: Long) {
+    private suspend fun CoroutineScope.processPdfStreaming(uri: Uri, msgId: String, isFastMode: Boolean, startMs: Long) {
         val fd = contentResolver.openFileDescriptor(uri, "r")
             ?: throw Exception("Cannot open file")
 
