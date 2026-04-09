@@ -12,6 +12,7 @@ on:
 env:
   LLAMA_CPP_TAG: b8683
   BINARY_RELEASE_TAG: llama-android-arm64-b8683-static
+  BINARY_FROM_RELEASE: 'false'
 
 jobs:
   build:
