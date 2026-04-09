@@ -207,4 +207,27 @@
     <string name="timing_elapsed">%1$s⏱ %2$d সেঃ</string>
     <string name="timing_done">%1$s⏱ %2$d সেঃ%3$s</string>
     <string name="error_prefix">ত্রুটি: %1$s</string>
+    <string name="prompt_mode_ocr">ওসিআর মোড</string>
+    <string name="prompt_mode_table">টেবিল শনাক্তকরণ</string>
+    <string name="prompt_mode_formula">সূত্র শনাক্তকরণ</string>
+    <string name="prompt_mode_chart">চার্ট শনাক্তকরণ</string>
+    <string name="prompt_mode_seal">সিল রিডার</string>
+    <string name="prompt_mode_spotting">টেক্সট স্পটিং</string>
+
+    <string name="menu_manage_models">মডেল ম্যানেজমেন্ট</string>
+    <string name="title_model_manager">মডেল ম্যানেজার</string>
+    <string name="title_hugging_face">হাগিং ফেস (Hugging Face) মডেল</string>
+    <string name="btn_browse_hf">হাগিং ফেস ব্রাউজ করুন</string>
+    <string name="model_status_active_main">সক্রিয় প্রধান মডেল</string>
+    <string name="model_status_active_vision">সক্রিয় ভিশন প্রজেক্টর</string>
+    <string name="model_status_inactive">নিষ্ক্রিয়</string>
+    <string name="dialog_set_model_title">সক্রিয় মডেল সেট করুন</string>
+    <string name="dialog_set_model_main">প্রধান ল্যাঙ্গুয়েজ মডেল হিসেবে সেট করুন</string>
+    <string name="dialog_set_model_vision">ভিশন প্রজেক্টর হিসেবে সেট করুন</string>
+    <string name="dialog_delete_model_title">মডেল মুছে ফেলুন</string>
+    <string name="dialog_delete_model_msg">আপনি কি নিশ্চিত যে এই মডেলটি মুছে ফেলতে চান? এটি আর ফিরিয়ে আনা যাবে না।</string>
+    <string name="dialog_cancel">বাতিল</string>
+    <string name="dialog_delete">মুছুন</string>
+    <string name="snack_restart_engine">মডেল পরিবর্তন করা হয়েছে। কার্যকরী করার জন্য ইঞ্জিন রিস্টার্ট করুন।</string>
+    <string name="empty_models">কোনো মডেল পাওয়া যায়নি। মডেল ব্রাউজ এবং ডাউনলোড করতে নিচের বাটনে চাপ দিন।</string>
 </resources>

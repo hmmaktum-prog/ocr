@@ -197,7 +197,6 @@
     <string name="btn_save_docx">Export</string>
     <string name="default_document_name">document</string>
     <string name="file_size_display">%1$s%2$.1f MB</string>
-    <string name="status_copied">Copied to clipboard</string>
     <string name="timing_page_progress">Page %1$d/%2$d</string>
     <string name="timing_elapsed">%1$s⏱ %2$ds</string>
     <string name="timing_done">%1$s⏱ %2$ds%3$s</string>

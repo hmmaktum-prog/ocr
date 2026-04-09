@@ -434,13 +434,14 @@ class MainActivity : AppCompatActivity() {
                 activityManager.getMemoryInfo(memInfo)
                 val totalRam = memInfo.totalMem / (1024 * 1024)
                 val availRam = memInfo.availMem / (1024 * 1024)
-                val usedRam = totalRam - availRam
-                binding.ramUsageText.text = "RAM: ${usedRam}MB / ${totalRam}MB"
+                val usedPercent = ((totalRam - availRam).toFloat() / totalRam * 100).toInt()
                 
-                if (memInfo.lowMemory) {
-                    binding.ramUsageText.setTextColor(android.graphics.Color.RED)
+                binding.ramUsageText.text = getString(R.string.ram_usage_text, usedPercent, availRam.toInt())
+                
+                if (memInfo.lowMemory || usedPercent > 90) {
+                    binding.ramUsageText.setTextColor(android.graphics.Color.parseColor("#EF4444")) // Vibrant Red
                 } else {
-                    binding.ramUsageText.setTextColor(ContextCompat.getColor(this@MainActivity, R.color.colorOnSecondary))
+                    binding.ramUsageText.setTextColor(ContextCompat.getColor(this@MainActivity, R.color.colorOnSurfaceVariant))
                 }
                 delay(1000)
             }

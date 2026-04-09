@@ -251,7 +251,7 @@ jobs:
       - name: Upload Debug APK
         uses: actions/upload-artifact@v4
         with:
-          name: app-debug-${{ github.run_number }}
+          name: app-debug-v${{ github.run_number }}
           path: app/build/outputs/apk/debug/app-debug.apk
           retention-days: 30
 
@@ -280,7 +280,7 @@ jobs:
       - name: Upload Release APK
         uses: actions/upload-artifact@v4
         with:
-          name: app-release-${{ github.run_number }}
+          name: app-release-v${{ github.run_number }}
           path: |
             app/build/outputs/apk/release/app-release.apk
             app/build/outputs/apk/release/app-release-unsigned.apk
@@ -324,23 +324,31 @@ jobs:
             ./apk/app-debug.apk
           name: "PaddleOCR-VL ${{ github.ref_name }}"
           body: |
-            ## PaddleOCR-VL ${{ github.ref_name }}
+            ## PaddleOCR-VL 🔥 ${{ github.ref_name }}
+            
+            আপনার জন্য একটি ফ্রেশ এবং অপ্টিমাইজড বিল্ড তৈরি করা হয়েছে। 
 
-            **llama-server**: llama.cpp b8683 (Android arm64-v8a, CPU-only static binary)
+            ### কি পরিবর্তন হয়েছে:
+            - **Build Blocker Fixed**: ডুপ্লিকেট স্ট্রিং এরর সমাধান করা হয়েছে।
+            - **Full Localization**: সকল মেনু এবং বাটন এখন বাংলায় অনুবাদ করা হয়েছে।
+            - **RAM Monitoring**: মেমরি ব্যবহারের তথ্য আরও নিখুঁতভাবে প্রদর্শিত হবে।
+            - **UI Refinement**: প্রিমিয়াম লুক এবং মডার্ন কালার প্যালেট যোগ করা হয়েছে।
 
-            ### ডাউনলোড করুন
-            - **app-release.apk** — Signed APK (সরাসরি ইনস্টল করুন)
-            - **app-release-unsigned.apk** — Unsigned APK (Keystore সেটআপ না থাকলে)
-            - **app-debug.apk** — Debug APK (টেস্টিং-এর জন্য)
+            ### টেকনিক্যাল ডিটেইলস:
+            - **llama-server**: llama.cpp ${{ env.LLAMA_CPP_TAG }} (Android arm64-v8a)
+            - **Build Number**: ${{ github.run_number }}
 
-            ### ইনস্টল করার আগে
-            - ফোনে "Unknown sources" চালু করুন
-            - Settings → Security → Install unknown apps
+            ### ডাউনলোড
+            - **app-release.apk** — মূল সাইনড এপিপি (ব্যাবহারের জন্য এটি ডাউনলোড করুন)
+            - **app-release-unsigned.apk** — আন-সাইনড ভার্সন
+            - **app-debug.apk** — ডেভেলপার ডিবগ মোড
 
-            ### সমর্থিত ডিভাইস
-            - **Architecture**: arm64-v8a (সকল আধুনিক Android ফোন)
-            - **ন্যূনতম Android**: 9.0 (API 28)
-            - **RAM**: কমপক্ষে 4GB (8GB+ সুপারিশ)
+            ### ইন্সটলেশন গাইড
+            - ফোনে "Unknown sources" অনুমতি দিন।
+            - রিলিজ ফাইলটি ডাউনলোড করে ইন্সটল করুন।
+
+            ---
+            *Built automatically using GitHub Actions.*
           draft: false
           prerelease: false
           fail_on_unmatched_files: false
