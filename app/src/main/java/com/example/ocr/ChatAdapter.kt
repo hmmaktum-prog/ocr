@@ -130,12 +130,13 @@ class ChatAdapter(
             if (path != null) {
                 thumbnailImage.visibility = View.VISIBLE
                 // Fix HIGH-07: Decode bitmap asynchronously to avoid main thread jank
+                val currentPosition = bindingAdapterPosition
                 adapterScope.launch {
                     val bitmap = withContext(Dispatchers.IO) {
                         val opts = BitmapFactory.Options().apply { inSampleSize = 2 }
                         BitmapFactory.decodeFile(path, opts)
                     }
-                    if (bitmap != null && bindingAdapterPosition != RecyclerView.NO_POSITION) {
+                    if (bitmap != null && currentPosition != RecyclerView.NO_POSITION) {
                         thumbnailImage.setImageBitmap(bitmap)
                         thumbnailImage.setOnClickListener {
                             onImageClicked(path)

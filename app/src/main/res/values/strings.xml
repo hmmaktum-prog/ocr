@@ -109,6 +109,7 @@
     <string name="warning_mobile_data">WARNING: You are on Mobile Data. This download may incur extra charges.</string>
 
     <!-- Fix LOGIC-05: Generic fallback error instead of raw exception message -->
+    <string name="error_engine_not_ready">Engine is not ready. Please wait for initialization to complete.</string>
     <string name="error_unknown">An unexpected error occurred. Please try again.</string>
     <string name="error_unsupported_file">Unsupported file type. Please select a PDF or image file (PNG, JPG, WebP).</string>
     <string name="error_decode_failed">Failed to decode image. The file may be corrupted.</string>

@@ -32,10 +32,13 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.onCompletion
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
@@ -327,7 +330,7 @@ class MainActivity : AppCompatActivity() {
                 if (memInfo.lowMemory) {
                     binding.ramUsageText.setTextColor(android.graphics.Color.RED)
                 } else {
-                    binding.ramUsageText.setTextColor(ContextCompat.getColor(this@MainActivity, R.color.seed))
+                    binding.ramUsageText.setTextColor(ContextCompat.getColor(this@MainActivity, R.color.colorOnSecondary))
                 }
                 delay(1000)
             }
@@ -768,7 +771,7 @@ class MainActivity : AppCompatActivity() {
                 withContext(Dispatchers.Main) {
                     chatAdapter.updateBotMessage(botMsg.id) {
                         it.state = ChatMessage.BotState.ERROR
-                        it.errorMessage = getUserFriendlyError(e)
+                        it.errorMessage = this@MainActivity.getUserFriendlyError(e)
                     }
                 }
             } finally {

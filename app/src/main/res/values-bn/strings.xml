@@ -43,6 +43,7 @@
     <string name="warning_mobile_data">সতর্কতা: আপনি মোবাইল ডেটা দিয়ে সংযুক্ত আছেন। এই ডাউনলোডের জন্য অতিরিক্ত ডেটা ফি লাগতে পারে।</string>
 
     <!-- Error messages -->
+    <string name="error_engine_not_ready">ইঞ্জিন প্রস্তুত নয়। অনুগ্রহ করে ইনিশিয়ালাইজেশন সম্পন্ন হওয়া পর্যন্ত অপেক্ষা করুন।</string>
     <string name="error_unknown">একটি অনাকাঙ্ক্ষিত ত্রুটি ঘটেছে। অনুগ্রহ করে আবার চেষ্টা করুন।</string>
     <string name="error_unsupported_file">অসমর্থিত ফাইল টাইপ। অনুগ্রহ করে একটি পিডিএফ অথবা ছবি (PNG, JPG, WebP) নির্বাচন করুন।</string>
     <string name="error_decode_failed">ছবি ডিকোড করতে ব্যর্থ হয়েছে। ফাইলটি নষ্ট হতে পারে।</string>
