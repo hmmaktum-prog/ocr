@@ -22,7 +22,7 @@
             app:title="@string/app_name"
             app:titleCentered="true"
             app:titleTextAppearance="?attr/textAppearanceHeadlineSmall"
-            app:subtitle="Ready"
+            app:subtitle="@string/status_ready"
             app:subtitleCentered="true">
 
             <com.google.android.material.card.MaterialCardView
@@ -87,17 +87,17 @@
             app:cardCornerRadius="70dp"
             app:cardBackgroundColor="?attr/colorPrimaryContainer"
             app:cardElevation="0dp"
-            app:strokeWidth="0dp"
+            app:strokeWidth="1dp"
+            app:strokeColor="?attr/colorOutline"
             android:layout_marginBottom="32dp">
             
-            <com.airbnb.lottie.LottieAnimationView
-                android:id="@+id/emptyStateAnimation"
-                android:layout_width="100dp"
-                android:layout_height="100dp"
+            <ImageView
+                android:id="@+id/emptyStateIcon"
+                android:layout_width="72dp"
+                android:layout_height="72dp"
                 android:layout_gravity="center"
-                app:lottie_rawRes="@raw/document_scan_anim"
-                app:lottie_autoPlay="true"
-                app:lottie_loop="true"
+                android:src="@drawable/ic_scan"
+                app:tint="?attr/colorPrimary"
                 android:contentDescription="@string/cd_app_logo"/>
         </com.google.android.material.card.MaterialCardView>
 
